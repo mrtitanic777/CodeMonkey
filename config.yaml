@@ -1,0 +1,148 @@
+# CodeMonkey's configuration. Most of it is easier to change in the app (Settings).
+#
+# An API key is NEVER stored here. Add keys in Settings > Models, or set CODEMONKEY_API_KEY
+# environment variable before running, e.g.:
+#   export CODEMONKEY_API_KEY="sk-..."
+
+# OpenAI-compatible chat-completions base URL. Used when the selected
+# provider below does not define its own. Examples:
+#   https://api.openai.com/v1
+#   http://localhost:11434/v1          (Ollama, local models)
+#   https://openrouter.ai/api/v1
+base_url: "http://localhost:11434/v1"
+
+# Model name as known by the endpoint above.
+model: "default"
+
+# Provider-agnostic model config (OpenCode pattern): `provider` names an
+# entry in `providers`. Each entry may set:
+#   base_url     endpoint for this provider (falls back to top-level base_url)
+#   api_key_env  env var holding the key; "" means no key needed (local
+#                endpoints like Ollama); omitted means the default
+#                CODEMONKEY_API_KEY is required.
+#   models       optional list of model names this provider serves
+# Swapping Ollama <-> vLLM <-> a hosted API is a one-field change.
+provider: "ollama"
+
+providers:
+  ollama:
+    base_url: "http://localhost:11434/v1"
+    api_key_env: ""
+  # LM Studio's local server (start it from LM Studio, Developer tab).
+  lmstudio:
+    base_url: "http://127.0.0.1:1234/v1"
+    api_key_env: ""
+    models:
+      - "qwen/qwen3.5-9b"
+      - "qwen/qwen2.5-coder-14b"
+      - "qwen/qwen2.5-coder-32b"
+  # Claude, through the official anthropic SDK (pip install anthropic).
+  # Add the key in Settings > Models, or set ANTHROPIC_API_KEY.
+  anthropic:
+    base_url: "https://api.anthropic.com"
+    api_key_env: "ANTHROPIC_API_KEY"
+    client: "anthropic"
+    vision: true
+    models:
+      - "claude-opus-5-5"
+      - "claude-sonnet-5-5"
+      - "claude-haiku-5-5"
+      - "claude-fable-5-1"
+  # OpenAI. Add the key in Settings > Models (or set OPENAI_API_KEY), then
+  # press Test to list the models your key can use.
+  openai:
+    base_url: "https://api.openai.com/v1"
+    api_key_env: "OPENAI_API_KEY"
+    vision: true
+  # OpenRouter: one key for models from many companies (openrouter.ai/keys).
+  openrouter:
+    base_url: "https://openrouter.ai/api/v1"
+    api_key_env: "OPENROUTER_API_KEY"
+  # vllm:
+  #   base_url: "http://localhost:8000/v1"
+  #   api_key_env: ""
+  # KeSSie backend (friend-built huge-context serving layer). The adapter
+  # translates KeSSie's <tool_call> text blocks into tool calls for the loop.
+  # NOTE: KeSSie's server is stateless per request (it re-ingests history
+  # every turn), so max_history_chars caps per-request cost.
+  # kessie:
+  #   base_url: "http://localhost:8200/v1"
+  #   api_key_env: ""
+  #   client: "kessie"
+  #   kessie:
+  #     timeout: 180
+  #     max_history_chars: 200000
+
+# What the agent calls itself in the system prompt.
+agent_name: "Assistant"
+
+# All runtime data (memory, history, logs, notes) lives here. Gitignored.
+workspace: "./agent-workspace"
+
+# Approval behaviour for sensitive tools (shell_exec, write_file, edit_file):
+#   ask  - prompt for interactive confirmation (default, safest)
+#   auto - approve automatically (the scheduler uses this; use with care)
+approval_mode: "ask"
+
+# Safety cap on tool-calling rounds per user message (scaled by effort: low x0.5, high x1.5,
+# max x2). A whole program takes many look-ups; a loop repeating one call is stopped separately.
+max_iterations: 100
+
+# Where skill directories live (each contains a SKILL.md).
+skills_dir: "./skills"
+
+# Coding settings.
+coder:
+  # Default project directory for coding sessions (overridden by --project).
+  project_dir: "."
+  # Approval behaviour for the coder's edit/write/bash tools. Empty means
+  # "inherit the top-level approval_mode".
+  approval_mode: ""
+  # Project context files auto-loaded into the system prompt when present.
+  # (Note: the built-in YAML parser is a subset — use block-style lists.)
+  context_files:
+    - "AGENTS.md"
+    - "CLAUDE.md"
+    - ".coderules"
+  # Slash-command definitions (each a *.md with frontmatter).
+  commands_dir: "./commands"
+  # MCP servers: {"servers": {"name": {"command": ..., "args": [...]}}}.
+  mcp_config: "./mcp.json"
+  # Where coding sessions live. Empty means <workspace>/coder/sessions.
+  sessions_dir: ""
+  # Planner/executor model split: /plan runs on this provider (e.g. a big,
+  # smart model), while /build and normal turns use the default provider
+  # (e.g. a small fast model). Empty = planner uses the default provider.
+  # planner_provider: "big"
+  # Project context packs: index the project into a stable prefix block
+  # (file tree, one-line summaries, symbol index) injected at session
+  # start. Deterministic and cached; disable if you want a bare prompt.
+  context_packs: true
+  # Task-level speculative execution (experimental): a fast model
+  # pre-executes predicted safe read-only tool calls; results are served
+  # only on exact tool+args match. Off by default; enable on a machine
+  # with a fast local model to measure hit rates via /specstats.
+  # speculation:
+  #   enabled: false
+  #   max_prefetch: 3
+  # Command sandbox for the agent's commands in the terminal coder and headless
+  # runs: "off", "guarded" or "strict" (coder/sandbox.py). The web UI sets it
+  # in Settings > Permissions; headless --sandbox overrides it.
+  # sandbox: "guarded"
+  # Language servers per language, when the one found on PATH is not the one
+  # you want (coder/lsp.py). Each is the command and its arguments.
+  # lsp:
+  #   python: "basedpyright-langserver --stdio"
+  #   typescript: "typescript-language-server --stdio"
+  # Hook programs (pre_tool / post_tool / turn_end / session_start / session_end)
+  # loaded by the terminal coder and the web UI. Empty = ./hooks.yaml.
+  # hooks_yaml: "./hooks.yaml"
+
+# Context management: automatic compaction keeps long sessions effective.
+# When history exceeds max_chars, the oldest middle is summarized into a
+# dense brief and the session continues as [system, brief, recent turns].
+context:
+  enabled: true
+  max_chars: 200000        # compact above this many history chars
+  keep_recent_chars: 40000 # recent tail preserved verbatim
+  chunk_chars: 60000       # summarizer chunk size (map-reduce)

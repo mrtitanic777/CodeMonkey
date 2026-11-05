@@ -1,0 +1,18 @@
+# Secrets and local runtime data — never commit these.
+.env
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+desktop/dist/
+# installed plugins (Settings > Plugins): each machine's own
+plugins/
+venv/
+
+# Agent runtime data (memory, history, logs, notes). Created at runtime.
+agent-workspace/
+*.log
+
+# MCP server config may carry secrets in per-server env vars.
+mcp.json
+.claude/

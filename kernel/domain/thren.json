@@ -1,0 +1,94 @@
+{
+  "tree": {
+    "thing": null,
+    "body": "thing",
+    "substance": "body",
+    "metalline": "substance",
+    "stonic": "substance",
+    "fluent": "substance",
+    "fibrous": "substance",
+    "vital": "body",
+    "qelt": "metalline",
+    "dornite": "metalline",
+    "morvane": "stonic",
+    "brask": "stonic",
+    "ulm": "fluent",
+    "seph": "fluent",
+    "fenn": "fibrous",
+    "kiv": "vital"
+  },
+  "aliases": {"q-metal": "qelt", "morv": "morvane"},
+  "matcher": {"max_distance": 0.3},
+  "words": ["thren", "derg", "tal", "tick", "grand"],
+
+  "quantities": {"pell": {"unit": "dg", "conversions": {"Gdg": 100}}},
+  "categories": {"glim": {"values": ["none", "blue", "green", "red"], "absent": "none"}},
+  "attributes": {"conductance": "Q·t/(dg·tick)", "harm_threshold": "dg", "resting_pell": "dg"},
+
+  "relations": {
+    "touches": {"symmetric": true, "attrs": {"span": "t"}},
+    "wraps": {"binds": true},
+    "soaks": {"binds": true},
+    "sight": {"symmetric": true},
+    "contact_path": {"symmetric": true},
+    "contact": {"symmetric": true},
+    "contact_flow": {"directed": true},
+    "radiant_flow": {"directed": true},
+    "flows": {"directed": true, "exclusive": true},
+    "harmed": {"any": true}
+  },
+
+  "facts": [
+    {"term": "qelt", "attr": "conductance", "value": 3.0, "source": "S1"},
+    {"term": "morvane", "attr": "conductance", "value": 1.2, "source": "S1"},
+    {"term": "morvane", "attr": "conductance", "value": 2.0, "source": "S2"},
+    {"term": "kiv", "attr": "resting_pell", "value": 20, "source": "S1"},
+    {"term": "kiv", "attr": "harm_threshold", "value": 45, "source": "S1"}
+  ],
+
+  "bands": [
+    {"id": "L2", "applies_to": ["qelt"], "quantity": "pell", "category": "glim",
+     "bands": [
+       {"value": "none", "lo": null, "hi": 500},
+       {"value": "blue", "lo": 500, "hi": 700},
+       {"value": "green", "lo": 700, "hi": 900},
+       {"value": "red", "lo": 900, "hi": null}
+     ]},
+    {"id": "L3", "applies_to": ["stonic"], "category": "glim", "fixed": "none"}
+  ],
+
+  "rules": [
+    {"id": "soak-wrap", "note": "a fluent soaking a wrap touches what the wrap encloses",
+     "match": [["soaks", "?f", "?w"], ["wraps", "?w", "?x"]], "conclude": ["touches", "?f", "?x"]},
+    {"id": "soak-touch", "note": "a fluent soaking a wrap touches what touches the wrap",
+     "match": [["soaks", "?f", "?w"], ["touches", "?y", "?w"]], "conclude": ["touches", "?f", "?y"]},
+    {"id": "L7", "match": [["isa", "?f", "fluent"], ["touches", "?f", "?x"], ["touches", "?f", "?y"]],
+     "distinct": [["?x", "?y"], ["?f", "?x"], ["?f", "?y"]], "conclude": ["contact_path", "?x", "?y"]},
+    {"id": "direct-contact", "match": [["touches", "?x", "?y"]], "conclude": ["contact", "?x", "?y"]},
+    {"id": "path-contact", "match": [["contact_path", "?x", "?y"]], "conclude": ["contact", "?x", "?y"]},
+    {"id": "L6", "match": [["isa", "?w", "fenn"], ["wraps", "?w", "?x"], ["touches", "?y", "?w"]],
+     "distinct": [["?x", "?y"]], "conclude": ["contact", "?x", "?y"], "polarity": false},
+    {"id": "L1", "note": "contact channel", "match": [["contact", "?a", "?b"]],
+     "conditions": [["gt", ["q", "pell", "?a"], ["q", "pell", "?b"]]], "conclude": ["contact_flow", "?a", "?b"]},
+    {"id": "L4", "note": "radiant channel; the handbook's 'only ever from higher to lower pell' binds it too",
+     "match": [["sight", "?a", "?b"]],
+     "conditions": [["neq", ["c", "glim", "?a"], "none"], ["gt", ["q", "pell", "?a"], ["q", "pell", "?b"]]],
+     "conclude": ["radiant_flow", "?a", "?b"]},
+    {"id": "flow-contact", "match": [["contact_flow", "?a", "?b"]], "conclude": ["flows", "?a", "?b"]},
+    {"id": "flow-radiant", "match": [["radiant_flow", "?a", "?b"]], "conclude": ["flows", "?a", "?b"]},
+    {"id": "L5", "match": [["touches", "?x", "?k"], ["isa", "?k", "kiv"]],
+     "conditions": [["gt", ["q", "pell", "?x"], ["a", "?k", "harm_threshold"]]], "conclude": ["harmed", "?k"]},
+    {"id": "L5-safe", "match": [["touches", "?x", "?k"], ["isa", "?k", "kiv"]],
+     "conditions": [["le", ["q", "pell", "?x"], ["a", "?k", "harm_threshold"]]], "conclude": ["harmed", "?k"],
+     "polarity": false}
+  ],
+
+  "operations": [
+    {"id": "L1-rate", "goal": "rate", "match": [["contact", "?a", "?b"]],
+     "orient": ["gt", ["q", "pell", "?a"], ["q", "pell", "?b"]],
+     "inputs": {"k": ["a", "?a", "conductance"], "pa": ["q", "pell", "?a"], "pb": ["q", "pell", "?b"],
+                "s": ["r", "touches", "?a", "?b", "span"]},
+     "formula": "k * (pa - pb) / s", "unit": "Q/tick",
+     "boundary": ["pa - pb <= 400", "s > 0"]}
+  ]
+}

@@ -1,0 +1,522 @@
+[
+ {
+  "id": "N-K1",
+  "category": "KNOWN",
+  "mirror_of": "K1",
+  "input": "ask value o-tone linkance",
+  "expect": [
+   {
+    "goal": "value(o-tone, linkance)",
+    "state": "KNOWN",
+    "value": "1.5 S·rd/(vx·beat)"
+   }
+  ]
+ },
+ {
+  "id": "N-K2",
+  "category": "KNOWN",
+  "mirror_of": "K2",
+  "input": "ask class telk",
+  "expect": [
+   {
+    "goal": "class(telk)",
+    "state": "KNOWN",
+    "value": "dullrock"
+   }
+  ]
+ },
+ {
+  "id": "N-K3",
+  "category": "KNOWN",
+  "mirror_of": "K3",
+  "input": "ask value mote crack_threshold",
+  "expect": [
+   {
+    "goal": "value(mote, crack_threshold)",
+    "state": "KNOWN",
+    "value": "225 vx"
+   }
+  ]
+ },
+ {
+  "id": "N-D1",
+  "category": "DERIVED_NO_OP",
+  "mirror_of": "D1",
+  "input": "let a = orrin keen tenor\nlet k = mote\nrel abuts a k\nask cracked k",
+  "expect": [
+   {
+    "goal": "cracked(k)",
+    "state": "DERIVED",
+    "value": "yes"
+   }
+  ]
+ },
+ {
+  "id": "N-D2",
+  "category": "DERIVED_NO_OP",
+  "mirror_of": "D2",
+  "input": "let a = orrin tarn 500 vx\nlet k = mote tarn 100 vx\nrel abuts a k\nask passes a k",
+  "expect": [
+   {
+    "goal": "passes(a, k)",
+    "state": "DERIVED",
+    "value": "a → k"
+   }
+  ]
+ },
+ {
+  "id": "N-D3",
+  "category": "DERIVED_NO_OP",
+  "mirror_of": "D3",
+  "input": "let a = orrin tarn 200 vx\nlet k = mote\nrel abuts a k\nask cracked k",
+  "expect": [
+   {
+    "goal": "cracked(k)",
+    "state": "DERIVED",
+    "value": "no"
+   }
+  ]
+ },
+ {
+  "id": "N-D4",
+  "category": "DERIVED_NO_OP",
+  "mirror_of": "D4",
+  "input": "let a = orrin tarn 1500 vx\nlet b = orrin tarn 500 vx\nlet p = wettle\nrel abuts p a\nrel abuts p b\nask passes a b",
+  "expect": [
+   {
+    "goal": "passes(a, b)",
+    "state": "DERIVED",
+    "value": "a → b"
+   }
+  ]
+ },
+ {
+  "id": "N-D5",
+  "category": "DERIVED_NO_OP",
+  "mirror_of": "D5",
+  "input": "let a = orrin tarn 3600 vx keen tenor\nshift a tarn -250 vx\nask keen a",
+  "expect": [
+   {
+    "goal": "keen(a)",
+    "state": "DERIVED",
+    "value": "treble"
+   }
+  ]
+ },
+ {
+  "id": "N-D6",
+  "category": "DERIVED_NO_OP",
+  "mirror_of": "D6",
+  "input": "let b = shalk\nask has keen b",
+  "expect": [
+   {
+    "goal": "has(keen, b)",
+    "state": "DERIVED",
+    "value": "no"
+   }
+  ]
+ },
+ {
+  "id": "N-O1",
+  "category": "DERIVED_OP",
+  "mirror_of": "O1",
+  "input": "let a = orrin tarn 1500 vx\nlet b = telkane tarn 100 vx\nrel abuts a b reach 4 rd\nask rate a b",
+  "expect": [
+   {
+    "goal": "rate(a, b)",
+    "state": "DERIVED",
+    "value": "525 S/beat"
+   }
+  ]
+ },
+ {
+  "id": "N-O2",
+  "category": "DERIVED_OP",
+  "mirror_of": "O2",
+  "input": "let a = o-tone tarn 1300 vx\nlet b = shalk tarn 300 vx\nrel abuts a b reach 8 rd\nask rate a b",
+  "expect": [
+   {
+    "goal": "rate(a, b)",
+    "state": "DERIVED",
+    "value": "187.5 S/beat"
+   }
+  ]
+ },
+ {
+  "id": "N-O3",
+  "category": "DERIVED_OP",
+  "mirror_of": "O3",
+  "input": "let a = orrin tarn 1.5 Kvx\nlet b = shalk tarn 100 vx\nrel abuts a b reach 2 rd\nask rate a b",
+  "expect": [
+   {
+    "goal": "rate(a, b)",
+    "state": "DERIVED",
+    "value": "1050 S/beat"
+   }
+  ]
+ },
+ {
+  "id": "N-U1",
+  "category": "UNKNOWN_REFERENCE",
+  "mirror_of": "U1",
+  "input": "ask value frab linkance",
+  "expect": [
+   {
+    "goal": "value(frab, linkance)",
+    "state": "UNKNOWN_REFERENCE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-U2",
+  "category": "UNKNOWN_REFERENCE",
+  "mirror_of": "U2",
+  "input": "let v = jusk\nlet q = orrin\nask compare linkance v q",
+  "expect": [
+   {
+    "goal": "compare(linkance, v, q)",
+    "state": "UNKNOWN_REFERENCE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-LC1",
+  "category": "LOW_CONFIDENCE",
+  "mirror_of": "LC1",
+  "input": "let m = telkite\nask has keen m",
+  "expect": [
+   {
+    "goal": "has(keen, m)",
+    "state": "LOW_CONFIDENCE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-LC2",
+  "category": "LOW_CONFIDENCE",
+  "mirror_of": "LC2",
+  "input": "ask value orrinh linkance",
+  "expect": [
+   {
+    "goal": "value(orrinh, linkance)",
+    "state": "LOW_CONFIDENCE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-M1",
+  "category": "MISSING_KNOWLEDGE",
+  "mirror_of": "M1",
+  "input": "let d = veskite tarn 1750 vx\nlet k = mote tarn 100 vx\nrel abuts d k reach 2 rd\nask rate d k",
+  "expect": [
+   {
+    "goal": "rate(d, k)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-M2",
+  "category": "MISSING_KNOWLEDGE",
+  "mirror_of": "M2",
+  "input": "let a = orrin keen silent\nlet k = mote\nrel abuts a k\nask cracked k",
+  "expect": [
+   {
+    "goal": "cracked(k)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-M3",
+  "category": "MISSING_KNOWLEDGE",
+  "mirror_of": "M3",
+  "input": "let a = orrin keen silent\nask tarn a",
+  "expect": [
+   {
+    "goal": "tarn(a)",
+    "state": "DERIVED",
+    "value": "below 2500 vx"
+   }
+  ]
+ },
+ {
+  "id": "N-M4",
+  "category": "MISSING_KNOWLEDGE",
+  "mirror_of": "M4",
+  "input": "let a = orrin tarn 1000 vx\nlet b = shalk tarn 250 vx\nrel abuts a b\nask rate a b",
+  "expect": [
+   {
+    "goal": "rate(a, b)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-C1",
+  "category": "CONFLICTED",
+  "mirror_of": "C1",
+  "input": "ask value telkane linkance",
+  "expect": [
+   {
+    "goal": "value(telkane, linkance)",
+    "state": "CONFLICTED",
+    "value": "either 0.6 S·rd/(vx·beat) or 1 S·rd/(vx·beat)",
+    "alternatives": [
+     "1.2 Q·t/(dg·tick) (from S1)",
+     "2 Q·t/(dg·tick) (from S2)"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "N-C2",
+  "category": "CONFLICTED",
+  "mirror_of": "C2",
+  "input": "let m = telkane tarn 1000 vx\nlet b = shalk tarn 250 vx\nrel abuts m b reach 2 rd\nask rate m b",
+  "expect": [
+   {
+    "goal": "rate(m, b)",
+    "state": "CONFLICTED",
+    "value": "either 225 S/beat or 375 S/beat",
+    "alternatives": [
+     "180 Q/tick (from S1)",
+     "300 Q/tick (from S2)"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "N-C3",
+  "category": "CONFLICTED",
+  "mirror_of": "C3",
+  "input": "let b = shalk keen treble\nask tarn b",
+  "expect": [
+   {
+    "goal": "tarn(b)",
+    "state": "CONFLICTED",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-S1",
+  "category": "UNKNOWN_STRUCTURE",
+  "mirror_of": "S1",
+  "input": "let a = orrin\nask owner a",
+  "expect": [
+   {
+    "goal": "owner(a)",
+    "state": "UNKNOWN_STRUCTURE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-S2",
+  "category": "UNKNOWN_STRUCTURE",
+  "mirror_of": "S2",
+  "input": "ask compare worth orrin veskite",
+  "expect": [
+   {
+    "goal": "compare(worth, orrin, veskite)",
+    "state": "UNKNOWN_STRUCTURE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-A1",
+  "category": "AMBIGUOUS_PATTERN",
+  "mirror_of": "A1",
+  "input": "let a = orrin tarn 3000 vx\nlet w = loam\nlet u = wettle\nlet k = mote tarn 100 vx\nrel sheathes w a\nrel steeps u w\nrel abuts k w\nask link a k",
+  "expect": [
+   {
+    "goal": "link(a, k)",
+    "state": "AMBIGUOUS_PATTERN",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-A2",
+  "category": "AMBIGUOUS_PATTERN",
+  "mirror_of": "A2",
+  "input": "let b = shalk tarn 1500 vx\nlet w = loam\nlet s = brume\nlet m = telkane tarn 250 vx\nrel sheathes w b\nrel steeps s w\nrel abuts m w\nask link b m",
+  "expect": [
+   {
+    "goal": "link(b, m)",
+    "state": "AMBIGUOUS_PATTERN",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-N1",
+  "category": "NO_VALID_RULE",
+  "mirror_of": "N1",
+  "input": "let s = brume tarn 4000 vx\nask keen s",
+  "expect": [
+   {
+    "goal": "keen(s)",
+    "state": "NO_VALID_RULE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-N2",
+  "category": "NO_VALID_RULE",
+  "mirror_of": "N2",
+  "input": "let a = orrin keen bass\nlet m = telkane\nrel hears a m\nask rate a m",
+  "expect": [
+   {
+    "goal": "rate(a, m)",
+    "state": "NO_VALID_RULE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-N3",
+  "category": "NO_VALID_RULE",
+  "mirror_of": "N3",
+  "input": "let a = orrin keen bass\nlet k = mote\nrel hears a k\nask passes a k\nask cracked k",
+  "expect": [
+   {
+    "goal": "passes(a, k)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   },
+   {
+    "goal": "cracked(k)",
+    "state": "NO_VALID_RULE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-B1",
+  "category": "OUT_OF_BOUNDARY",
+  "mirror_of": "B1",
+  "input": "let a = orrin tarn 2250 vx\nlet b = telkane tarn 100 vx\nrel abuts a b reach 2 rd\nask rate a b",
+  "expect": [
+   {
+    "goal": "rate(a, b)",
+    "state": "OUT_OF_BOUNDARY",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-B2",
+  "category": "OUT_OF_BOUNDARY",
+  "mirror_of": "B2",
+  "input": "let a = orrin tarn 2.5 Kvx\nlet k = mote tarn 100 vx\nrel abuts a k reach 2 rd\nask rate a k",
+  "expect": [
+   {
+    "goal": "rate(a, k)",
+    "state": "OUT_OF_BOUNDARY",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-B3",
+  "category": "OUT_OF_BOUNDARY",
+  "mirror_of": "B3",
+  "input": "let a = orrin tarn 500 vx\nlet b = shalk tarn 250 vx\nrel abuts a b reach 0 rd\nask rate a b",
+  "expect": [
+   {
+    "goal": "rate(a, b)",
+    "state": "OUT_OF_BOUNDARY",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-F1",
+  "category": "CONFABULATED",
+  "mirror_of": "F1",
+  "input": "let d = veskite tarn 3000 vx\nask keen d",
+  "expect": [
+   {
+    "goal": "keen(d)",
+    "state": "CONFABULATED",
+    "value": "possibly treble"
+   }
+  ]
+ },
+ {
+  "id": "N-F2",
+  "category": "CONFABULATED",
+  "mirror_of": "F2",
+  "input": "teach sapher isa resonant\nlet rd = sapher tarn 3000 vx\nask has keen rd",
+  "expect": [
+   {
+    "goal": "has(keen, rd)",
+    "state": "CONFABULATED",
+    "value": "possibly yes"
+   }
+  ]
+ },
+ {
+  "id": "N-F3",
+  "category": "CONFABULATED",
+  "mirror_of": "F3",
+  "input": "estimate value veskite linkance",
+  "expect": [
+   {
+    "goal": "value(veskite, linkance)",
+    "state": "CONFABULATED",
+    "value": "possibly 1.5 S·rd/(vx·beat)"
+   }
+  ]
+ },
+ {
+  "id": "N-R1",
+  "category": "TRAP_REVERSED_COLORS",
+  "mirror_of": "R1",
+  "input": "let before = orrin keen treble\nlet after = orrin keen bass\nask compare tarn after before",
+  "expect": [
+   {
+    "goal": "compare(tarn, after, before)",
+    "state": "DERIVED",
+    "value": "after > before"
+   }
+  ]
+ },
+ {
+  "id": "N-R2",
+  "category": "TRAP_REVERSED_COLORS",
+  "mirror_of": "R2",
+  "input": "let x = orrin keen treble\nlet y = orrin keen bass\nask compare tarn x y",
+  "expect": [
+   {
+    "goal": "compare(tarn, x, y)",
+    "state": "DERIVED",
+    "value": "x < y"
+   }
+  ]
+ },
+ {
+  "id": "N-R3",
+  "category": "TRAP_REVERSED_COLORS",
+  "mirror_of": "R3",
+  "input": "let r = orrin keen bass\nlet b = orrin keen treble\nrel abuts r b\nask passes r b",
+  "expect": [
+   {
+    "goal": "passes(r, b)",
+    "state": "DERIVED",
+    "value": "r → b"
+   }
+  ]
+ }
+]

@@ -1,0 +1,1079 @@
+[
+ {
+  "id": "H01",
+  "category": "DERIVED",
+  "english": "A block of qelt holds a pell of 7 grand derg (Gdg). What color does it glim, and does it glim at all?",
+  "input": "let q = qelt pell 7 Gdg\nask glim q\nask has glim q",
+  "expect": [
+   {
+    "goal": "glim(q)",
+    "state": "DERIVED",
+    "value": "green"
+   },
+   {
+    "goal": "has(glim, q)",
+    "state": "DERIVED",
+    "value": "yes"
+   }
+  ],
+  "laws": [
+   "L2"
+  ],
+  "rationale": "7 Gdg = 700 dg. L2: 700 <= pell < 900 is green (lower boundary is inclusive), so it glims.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H02",
+  "category": "DERIVED",
+  "english": "A qelt block was recorded at 450 dg and someone noted it glimming blue. Its pell was then raised by 250 dg, and the earlier glim note no longer applies. A morvane block sits at 7 Gdg. What color does the qelt glim now? How does the qelt's pell compare with the morvane's? What color does the morvane glim?",
+  "input": "let q = qelt pell 450 dg glim blue\nlet m = morvane pell 7 Gdg\nshift q pell 250 dg\nask glim q\nask compare pell q m\nask glim m",
+  "expect": [
+   {
+    "goal": "glim(q)",
+    "state": "DERIVED",
+    "value": "green"
+   },
+   {
+    "goal": "compare(pell, q, m)",
+    "state": "DERIVED",
+    "value": "q = m"
+   },
+   {
+    "goal": "glim(m)",
+    "state": "DERIVED",
+    "value": "none"
+   }
+  ],
+  "laws": [
+   "L2",
+   "L3"
+  ],
+  "rationale": "The initial let conflicts (450 dg means no glim under L2, but blue was observed), but shift discards earlier glim observations. 450+250 = 700 dg, which is green (boundary). m = 7 Gdg = 700 dg, so q = m. Morvane is stonic, so L3 gives none even at 700 dg. A system that keeps the stale 'blue' or reports CONFLICTED fails.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H03",
+  "category": "DERIVED",
+  "english": "A qelt block at 9 Gdg touches a morvane block at 500 dg along a 4 tal contact path. It also touches a brask block at 8.9 Gdg, again along a 4 tal path. What is the contact passage rate between the qelt and the morvane, and between the qelt and the brask? Which way does thren flow between the morvane and the qelt?",
+  "input": "let q = qelt pell 9 Gdg\nlet m = morvane pell 500 dg\nlet b = brask pell 8.9 Gdg\nrel touches q m span 4 t\nrel touches q b span 4 t\nask rate q m\nask rate q b\nask flows m q",
+  "expect": [
+   {
+    "goal": "rate(q, m)",
+    "state": "DERIVED",
+    "value": "300 Q/tick"
+   },
+   {
+    "goal": "rate(q, b)",
+    "state": "DERIVED",
+    "value": "7.5 Q/tick"
+   },
+   {
+    "goal": "flows(m, q)",
+    "state": "DERIVED",
+    "value": "q → m"
+   }
+  ],
+  "laws": [
+   "L1"
+  ],
+  "rationale": "q = 900 dg, m = 500 dg, so the difference is exactly 400 dg (valid, since the limit is at most 400). Qelt is higher, so conductance is 3: 3*400/4 = 300. b = 890 dg, difference 10: 3*10/4 = 7.5. Brask's missing conductance does not matter because qelt is the higher-pell body. Morvane's S1/S2 conflict does not matter either, for the same reason.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H04",
+  "category": "DERIVED",
+  "english": "A kiv (living tissue) is touching a qelt block that is seen glimming blue. No pell was measured. What can be said about the qelt's pell, what color is it, and is the kiv harmed?",
+  "input": "let q = qelt glim blue\nlet k = kiv\nrel touches k q\nask pell q\nask glim q\nask harmed k",
+  "expect": [
+   {
+    "goal": "pell(q)",
+    "state": "DERIVED",
+    "value": "from 500 to below 700 dg"
+   },
+   {
+    "goal": "glim(q)",
+    "state": "KNOWN",
+    "value": "blue"
+   },
+   {
+    "goal": "harmed(k)",
+    "state": "DERIVED",
+    "value": "yes"
+   }
+  ],
+  "laws": [
+   "L2",
+   "L5"
+  ],
+  "rationale": "Blue under L2 means 500 <= pell < 700. The glim is given in the input, so it is KNOWN. Every value in that range is above 45 dg, so L5 gives harmed = yes even though the exact pell is unknown. This is a chain: glim, then pell range, then harm.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H05",
+  "category": "DERIVED",
+  "english": "A qelt block seen glimming blue touches a brask block at exactly 700 dg over a 3 tal path. Which way does thren flow between them? What color does the brask glim? What is the passage rate?",
+  "input": "let q = qelt glim blue\nlet b = brask pell 700 dg\nrel touches q b span 3 t\nask flows q b\nask glim b\nask rate q b",
+  "expect": [
+   {
+    "goal": "flows(q, b)",
+    "state": "DERIVED",
+    "value": "b → q"
+   },
+   {
+    "goal": "glim(b)",
+    "state": "DERIVED",
+    "value": "none"
+   },
+   {
+    "goal": "rate(q, b)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   }
+  ],
+  "laws": [
+   "L1",
+   "L2",
+   "L3"
+  ],
+  "rationale": "Blue means q is below 700 dg, so b (exactly 700) is strictly higher and thren flows b → q. Brask is stonic, so none. Rate: the higher-pell body is brask, which has no measured conductance, and q's pell is only a range. Both give MISSING_KNOWLEDGE.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H06",
+  "category": "DERIVED",
+  "english": "A qelt block at 300 dg and a morvane block at 100 dg do not touch each other directly, but a puddle of seph touches both. Is there contact passage between the qelt and the morvane? Which way does thren flow between them? What is the passage rate?",
+  "input": "let q = qelt pell 300 dg\nlet m = morvane pell 100 dg\nlet s = seph\nrel touches s q\nrel touches s m\nask contact q m\nask flows m q\nask rate q m",
+  "expect": [
+   {
+    "goal": "contact(q, m)",
+    "state": "DERIVED",
+    "value": "yes"
+   },
+   {
+    "goal": "flows(m, q)",
+    "state": "DERIVED",
+    "value": "q → m"
+   },
+   {
+    "goal": "rate(q, m)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   }
+  ],
+  "laws": [
+   "L7",
+   "L1"
+  ],
+  "rationale": "Seph is fluent. Under L7 it bridges q and m, so there is contact. 300 > 100, so flow is q → m. A fluent-bridge contact has no span, so the rate is MISSING_KNOWLEDGE, as LANGUAGE.md states explicitly.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H07",
+  "category": "DERIVED",
+  "english": "A qelt block at 400 dg is wrapped in fenn, and the fenn wrap is soaked with ulm. A morvane block at 150 dg rests against the outside of the wrap. Is there contact passage between the qelt and the morvane? Which way does thren flow? What is the passage rate?",
+  "input": "let q = qelt pell 400 dg\nlet f = fenn\nlet u = ulm\nlet m = morvane pell 150 dg\nrel wraps f q\nrel soaks u f\nrel touches m f\nask contact q m\nask flows q m\nask rate q m",
+  "expect": [
+   {
+    "goal": "contact(q, m)",
+    "state": "DERIVED",
+    "value": "yes"
+   },
+   {
+    "goal": "flows(q, m)",
+    "state": "DERIVED",
+    "value": "q → m"
+   },
+   {
+    "goal": "rate(q, m)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   }
+  ],
+  "laws": [
+   "L6",
+   "L7",
+   "L1"
+  ],
+  "rationale": "By the soak convention, u touches q (the enclosed body) and m (touches the wrap), so L7 gives a bridge q–m. L6 says no (m touches the wrap). L7's facts {wraps, soaks, touches m f} are a strict superset of L6's {wraps, touches m f}, so L7 prevails: contact yes. 400 > 150 gives q → m. The bridge has no span, so the rate is MISSING_KNOWLEDGE. Chunks: {q,f,u}, m = 2.",
+  "spec_ambiguity": "The spec does not say outright that the law resting on strictly more facts wins. That is inferred from the AMBIGUOUS_PATTERN definition. If it were not applied, contact(q, m) could come out AMBIGUOUS_PATTERN."
+ },
+ {
+  "id": "H08",
+  "category": "DERIVED",
+  "english": "A qelt block at 820 dg is wrapped in fenn (not soaked). A brask block at 300 dg rests against the wrap over a 2 tal path, and the brask is also in direct line of sight of the qelt. Is there contact passage between the qelt and the brask? Which way does thren flow between them? What color does the qelt glim?",
+  "input": "let q = qelt pell 820 dg\nlet f = fenn\nlet b = brask pell 300 dg\nrel wraps f q\nrel touches b f span 2 t\nrel sight q b\nask contact q b\nask flows q b\nask glim q",
+  "expect": [
+   {
+    "goal": "contact(q, b)",
+    "state": "DERIVED",
+    "value": "no"
+   },
+   {
+    "goal": "flows(q, b)",
+    "state": "DERIVED",
+    "value": "q → b"
+   },
+   {
+    "goal": "glim(q)",
+    "state": "DERIVED",
+    "value": "green"
+   }
+  ],
+  "laws": [
+   "L6",
+   "L4",
+   "L2"
+  ],
+  "rationale": "L6: the unsoaked wrap blocks contact passage, so no. q at 820 dg is green (L2), so it glims, and L4 radiant passage is not blocked by the wrap (L6), giving flow q → b. A system that answers 'no flow' because of the wrap is over-abstaining.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H09",
+  "category": "DERIVED",
+  "english": "Two pieces of kiv, k1 and k2. k1 touches a morvane block at exactly 45 dg. k2 touches the same morvane block and also a qelt block at 0.46 Gdg. Is k1 harmed? Is k2 harmed?",
+  "input": "let k1 = kiv\nlet k2 = kiv\nlet m = morvane pell 45 dg\nlet q = qelt pell 0.46 Gdg\nrel touches k1 m\nrel touches k2 m\nrel touches k2 q\nask harmed k1\nask harmed k2",
+  "expect": [
+   {
+    "goal": "harmed(k1)",
+    "state": "DERIVED",
+    "value": "no"
+   },
+   {
+    "goal": "harmed(k2)",
+    "state": "DERIVED",
+    "value": "yes"
+   }
+  ],
+  "laws": [
+   "L5"
+  ],
+  "rationale": "L5: at or below 45 dg does not harm, so 45 gives no. 0.46 Gdg = 46 dg > 45, so k2 is harmed. 4 chunks, within headspace.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H10",
+  "category": "DERIVED",
+  "english": "Suppose 'tessik' is a new kind of stonic substance. A tessik block holds 9.5 Gdg. What color does it glim, does it glim at all, and what class is tessik?",
+  "input": "teach tessik isa stonic\nlet v = tessik pell 9.5 Gdg\nask glim v\nask has glim v\nask class tessik",
+  "expect": [
+   {
+    "goal": "glim(v)",
+    "state": "DERIVED",
+    "value": "none"
+   },
+   {
+    "goal": "has(glim, v)",
+    "state": "DERIVED",
+    "value": "no"
+   },
+   {
+    "goal": "class(tessik)",
+    "state": "KNOWN",
+    "value": "stonic"
+   }
+  ],
+  "laws": [
+   "L3"
+  ],
+  "rationale": "Taught term under stonic. L3 covers all stonics, so it never glims, even at 950 dg (a careless reader would say red). The class is given by teach, so KNOWN. 'tessik' has no close spelling to any known term.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H11",
+  "category": "DERIVED",
+  "english": "A qelt block at 880 dg is wrapped in fenn soaked with seph. A morvane block at 480 dg rests against the wrap. Separately, a kiv touches a brask block at 45 dg. Is there contact passage between the qelt and the morvane? Which way does thren flow between them? Is the kiv harmed?",
+  "input": "let q = qelt pell 880 dg\nlet f = fenn\nlet s = seph\nlet m = morvane pell 480 dg\nlet k = kiv\nlet b = brask pell 45 dg\nrel wraps f q\nrel soaks s f\nrel touches m f\nrel touches k b\nask contact q m\nask flows q m\nask harmed k",
+  "expect": [
+   {
+    "goal": "contact(q, m)",
+    "state": "DERIVED",
+    "value": "yes"
+   },
+   {
+    "goal": "flows(q, m)",
+    "state": "DERIVED",
+    "value": "q → m"
+   },
+   {
+    "goal": "harmed(k)",
+    "state": "DERIVED",
+    "value": "no"
+   }
+  ],
+  "laws": [
+   "L6",
+   "L7",
+   "L1",
+   "L5"
+  ],
+  "rationale": "There are 6 entities, but wraps/soaks join {q,f,s} into one chunk, so the chunks are {q,f,s}, m, k, b = 4, which is within the limit (must not answer UNKNOWN_STRUCTURE). The soaked wrap bridges q–m, as in H07. 880 > 480 gives q → m (no sight, so no L4). Brask at 45 dg is not above 45, so harmed = no.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H12",
+  "category": "KNOWN",
+  "english": "What is the conductance of q-metal? What is the harm threshold of kiv? What class of substance is morv?",
+  "input": "ask value q-metal conductance\nask value kiv harm_threshold\nask class morv",
+  "expect": [
+   {
+    "goal": "value(q-metal, conductance)",
+    "state": "KNOWN",
+    "value": "3 Q·t/(dg·tick)"
+   },
+   {
+    "goal": "value(kiv, harm_threshold)",
+    "state": "KNOWN",
+    "value": "45 dg"
+   },
+   {
+    "goal": "class(morv)",
+    "state": "KNOWN",
+    "value": "stonic"
+   }
+  ],
+  "laws": [],
+  "rationale": "Handbook measured values (S1): qelt 3.0 is written as 3, since whole numbers have no decimals. Kiv harm threshold is 45 dg. The aliases q-metal = qelt and morv = morvane resolve, and morvane is stonic.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H13",
+  "category": "KNOWN",
+  "english": "A qelt block is at 3.5 Gdg and is observed not glimming. A kiv touching it has a measured pell of 20 dg, over a 5 tal contact path. What is the qelt's pell in dg, what is its glim, what is the kiv's pell, how do the two pells compare, and what is the passage rate?",
+  "input": "let q = qelt pell 3.5 Gdg glim none\nlet k = kiv pell 20 dg\nrel touches q k span 5 t\nask pell q\nask glim q\nask pell k\nask compare pell q k\nask rate q k",
+  "expect": [
+   {
+    "goal": "pell(q)",
+    "state": "KNOWN",
+    "value": "350 dg"
+   },
+   {
+    "goal": "glim(q)",
+    "state": "KNOWN",
+    "value": "none"
+   },
+   {
+    "goal": "pell(k)",
+    "state": "KNOWN",
+    "value": "20 dg"
+   },
+   {
+    "goal": "compare(pell, q, k)",
+    "state": "DERIVED",
+    "value": "q > k"
+   },
+   {
+    "goal": "rate(q, k)",
+    "state": "DERIVED",
+    "value": "198 Q/tick"
+   }
+  ],
+  "laws": [
+   "L1",
+   "L2"
+  ],
+  "rationale": "The given values are KNOWN (3.5 Gdg = 350 dg). The glim none is consistent with L2 (350 < 500). Kiv pell is given explicitly here. Rate: qelt is higher, 3*(350-20)/5 = 3*330/5 = 198.",
+  "spec_ambiguity": "The spec does not say whether a given pell stated in Gdg and asked in dg (unit conversion only) stays KNOWN. Expected KNOWN."
+ },
+ {
+  "id": "H14",
+  "category": "KNOWN",
+  "english": "Earlier feedback confirmed that 'dorniet' is just a misspelling of dornite. A dorniet block sits at 200 dg. What class is dorniet, what is the block's pell, and what is your best estimate of qelt's conductance?",
+  "input": "confirm dorniet means dornite\nlet d = dorniet pell 200 dg\nask class dorniet\nask pell d\nestimate value qelt conductance",
+  "expect": [
+   {
+    "goal": "class(dorniet)",
+    "state": "KNOWN",
+    "value": "metalline"
+   },
+   {
+    "goal": "pell(d)",
+    "state": "KNOWN",
+    "value": "200 dg"
+   },
+   {
+    "goal": "value(qelt, conductance)",
+    "state": "KNOWN",
+    "value": "3 Q·t/(dg·tick)"
+   }
+  ],
+  "laws": [],
+  "rationale": "dorniet vs dornite has Levenshtein distance 2 (a transposition), and 2 <= 0.3*7 = 2.1. Without the confirm it would be LOW_CONFIDENCE, but confirm binds it to dornite, which is metalline. estimate on a measured value still returns KNOWN, with no confabulation.",
+  "spec_ambiguity": "The goal label for an 'estimate' line is assumed to use the question word 'value', i.e. value(qelt, conductance)."
+ },
+ {
+  "id": "H15",
+  "category": "UNKNOWN_REFERENCE",
+  "english": "A kiw touches a morvane block at 60 dg. Is the kiw harmed? What color does the morvane glim?",
+  "input": "let k = kiw\nlet m = morvane pell 60 dg\nrel touches k m\nask harmed k\nask glim m",
+  "expect": [
+   {
+    "goal": "harmed(k)",
+    "state": "UNKNOWN_REFERENCE",
+    "value": "unknown"
+   },
+   {
+    "goal": "glim(m)",
+    "state": "UNKNOWN_REFERENCE",
+    "value": "unknown"
+   }
+  ],
+  "laws": [],
+  "rationale": "kiw vs kiv has edit distance 1. The longer word has 3 letters, so the threshold is 0.3*3 = 0.9, and 1 > 0.9 means it is NOT a close spelling (just outside). No other known term is within threshold. The unbound term fails every question, including glim(m), which would otherwise be DERIVED none.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H16",
+  "category": "UNKNOWN_REFERENCE",
+  "english": "A murvain block at 300 dg touches a qelt block at 600 dg over a 3 tal path. What is the passage rate, and what color does the qelt glim?",
+  "input": "let m = murvain pell 300 dg\nlet q = qelt pell 600 dg\nrel touches q m span 3 t\nask rate q m\nask glim q",
+  "expect": [
+   {
+    "goal": "rate(q, m)",
+    "state": "UNKNOWN_REFERENCE",
+    "value": "unknown"
+   },
+   {
+    "goal": "glim(q)",
+    "state": "UNKNOWN_REFERENCE",
+    "value": "unknown"
+   }
+  ],
+  "laws": [],
+  "rationale": "Levenshtein(murvain, morvane) = 3 (o→u, and 'ne'→'in' costs 2; confirmed by a full DP table). The threshold is 0.3*7 = 2.1, and 3 > 2.1, so it is not close. Against the alias morv the distance is 4, also not close. The unbound term fails all questions. Without the typo this would be rate 300 Q/tick and glim blue.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H17",
+  "category": "UNKNOWN_REFERENCE",
+  "english": "A kiv touches a qelt block at 950 dg. Is the kiv harmed? Is k2 harmed? (No k2 was ever described.)",
+  "input": "let q = qelt pell 950 dg\nlet k = kiv\nrel touches k q\nask harmed k\nask harmed k2",
+  "expect": [
+   {
+    "goal": "harmed(k)",
+    "state": "UNKNOWN_REFERENCE",
+    "value": "unknown"
+   },
+   {
+    "goal": "harmed(k2)",
+    "state": "UNKNOWN_REFERENCE",
+    "value": "unknown"
+   }
+  ],
+  "laws": [],
+  "rationale": "The name k2 is never introduced. Its distance to 'k' is 1, and 1/2 = 50% > 30%, so it has no close spelling. 'Any unbound term fails every question in that input', so harmed(k) also fails (a careless reader answers yes).",
+  "spec_ambiguity": "Names are assumed to be subject to the same binding rule as terms (the spec lists 'name' under UNKNOWN_REFERENCE). Either way k2 is not a close spelling."
+ },
+ {
+  "id": "H18",
+  "category": "LOW_CONFIDENCE",
+  "english": "A kiv touches a morvain block at 2 Gdg. Is the kiv harmed? What class is morvain?",
+  "input": "let m = morvain pell 2 Gdg\nlet k = kiv\nrel touches k m\nask harmed k\nask class morvain",
+  "expect": [
+   {
+    "goal": "harmed(k)",
+    "state": "LOW_CONFIDENCE",
+    "value": "unknown"
+   },
+   {
+    "goal": "class(morvain)",
+    "state": "LOW_CONFIDENCE",
+    "value": "unknown"
+   }
+  ],
+  "laws": [],
+  "rationale": "Levenshtein(morvain, morvane) = 2 (shared prefix 'morva', then 'in' vs 'ne' costs 2). The threshold is 0.3*7 = 2.1, and 2 <= 2.1, so it is a close spelling (just inside) and LOW_CONFIDENCE fails every question. Contrast with H16, where 'murvain' is at distance 3.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H19",
+  "category": "LOW_CONFIDENCE",
+  "english": "A kivv touches a qelt block at 40 dg. Is the kivv harmed? What color does the qelt glim?",
+  "input": "let k = kivv\nlet q = qelt pell 40 dg\nrel touches k q\nask harmed k\nask glim q",
+  "expect": [
+   {
+    "goal": "harmed(k)",
+    "state": "LOW_CONFIDENCE",
+    "value": "unknown"
+   },
+   {
+    "goal": "glim(q)",
+    "state": "LOW_CONFIDENCE",
+    "value": "unknown"
+   }
+  ],
+  "laws": [],
+  "rationale": "kivv vs kiv has distance 1. The longer word has 4 letters, so the threshold is 1.2, and 1 <= 1.2 means close (inside). Contrast with H15, where 'kiw' has 3 letters, threshold 0.9, so it is outside. A careless reader answers harmed = no (40 <= 45).",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H20",
+  "category": "LOW_CONFIDENCE",
+  "english": "A qelt block at 750 dg is observed to glim gren. What color does it glim, and what is its pell?",
+  "input": "let q = qelt pell 750 dg glim gren\nask glim q\nask pell q",
+  "expect": [
+   {
+    "goal": "glim(q)",
+    "state": "LOW_CONFIDENCE",
+    "value": "unknown"
+   },
+   {
+    "goal": "pell(q)",
+    "state": "LOW_CONFIDENCE",
+    "value": "unknown"
+   }
+  ],
+  "laws": [],
+  "rationale": "The color 'gren' vs 'green' has distance 1. The threshold is 0.3*5 = 1.5, so it is close. Against red the distance is 2 (threshold 1.2), and blue and none are farther. The unbound color fails all questions, even though green would be consistent with 750 dg.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H21",
+  "category": "MISSING_KNOWLEDGE",
+  "english": "A qelt block at 60 dg touches a kiv over a 2 tal contact path. The kiv's pell was not measured. What is the passage rate, which way does thren flow, and is the kiv harmed?",
+  "input": "let q = qelt pell 60 dg\nlet k = kiv\nrel touches q k span 2 t\nask rate q k\nask flows q k\nask harmed k",
+  "expect": [
+   {
+    "goal": "rate(q, k)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   },
+   {
+    "goal": "flows(q, k)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   },
+   {
+    "goal": "harmed(k)",
+    "state": "DERIVED",
+    "value": "yes"
+   }
+  ],
+  "laws": [
+   "L1",
+   "L5"
+  ],
+  "rationale": "A kiv entity's pell is not filled in from the resting pell (20 dg). A careless reader would compute 3*40/2 = 60 Q/tick and q → k. L1 applies but the kiv's pell is absent, so both are MISSING_KNOWLEDGE. Harm needs only the touching body's pell: 60 > 45, so yes.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H22",
+  "category": "MISSING_KNOWLEDGE",
+  "english": "A kiv touches a qelt block that is observed not glimming. There is also a morvane block at 450 dg and a brask block at 500 dg (neither touches anything). Is the kiv harmed? What can be said about the qelt's pell? How does the qelt's pell compare with the morvane's, and with the brask's?",
+  "input": "let q = qelt glim none\nlet k = kiv\nlet m = morvane pell 450 dg\nlet b = brask pell 500 dg\nrel touches k q\nask harmed k\nask pell q\nask compare pell q m\nask compare pell q b",
+  "expect": [
+   {
+    "goal": "harmed(k)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   },
+   {
+    "goal": "pell(q)",
+    "state": "DERIVED",
+    "value": "below 500 dg"
+   },
+   {
+    "goal": "compare(pell, q, m)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   },
+   {
+    "goal": "compare(pell, q, b)",
+    "state": "DERIVED",
+    "value": "q < b"
+   }
+  ],
+  "laws": [
+   "L2",
+   "L5"
+  ],
+  "rationale": "A qelt that does not glim is below 500 dg (L2). That range contains values both above and at/below 45, so harm is undecidable, which is MISSING_KNOWLEDGE (a careless reader says no). The range straddles 450, so compare with m is MISSING. The range is entirely below 500, so q < b.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H23",
+  "category": "MISSING_KNOWLEDGE",
+  "english": "What is the conductance of dornite? What is your best guess for the conductance of ulm? What is kiv's resting pell?",
+  "input": "ask value dornite conductance\nestimate value ulm conductance\nask value kiv resting_pell",
+  "expect": [
+   {
+    "goal": "value(dornite, conductance)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   },
+   {
+    "goal": "value(ulm, conductance)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   },
+   {
+    "goal": "value(kiv, resting_pell)",
+    "state": "KNOWN",
+    "value": "20 dg"
+   }
+  ],
+  "laws": [],
+  "rationale": "No dornite conductance is measured, and a plain ask never borrows (compare H40, where estimate borrows qelt's). Estimate for ulm may borrow only from a sibling. Ulm's sibling seph has no conductance either, so it stays MISSING_KNOWLEDGE (not CONFABULATED). Kiv resting pell is 20 dg (S1).",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H24",
+  "category": "MISSING_KNOWLEDGE",
+  "english": "A qelt block was seen glimming blue; its pell was never measured. Then its pell was raised by 100 dg, and the earlier glim observation no longer applies. What color does it glim now?",
+  "input": "let q = qelt glim blue\nshift q pell 100 dg\nask glim q",
+  "expect": [
+   {
+    "goal": "glim(q)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   }
+  ],
+  "laws": [
+   "L2"
+  ],
+  "rationale": "Shift discards the earlier glim observation, and q has no exact pell to shift. L2 applies to qelt but needs the pell, so the answer is MISSING_KNOWLEDGE. A careless reader keeps 'blue', or reasons that 600 to 800 dg could be blue or green.",
+  "spec_ambiguity": "The spec defines shift only as changing an entity's EXACT pell. It does not say what happens when there is no exact pell (the range could be shifted to 600–<800, which is still undecidable, or the shift could be rejected). Every reading I can see still gives an undecided glim, so MISSING_KNOWLEDGE is expected, but a system could also reject the statement."
+ },
+ {
+  "id": "H25",
+  "category": "CONFLICTED",
+  "english": "What is the conductance of morv? Is q-metal's conductance greater than, less than, or equal to morv's?",
+  "input": "ask value morv conductance\nask compare conductance q-metal morv",
+  "expect": [
+   {
+    "goal": "value(morv, conductance)",
+    "state": "CONFLICTED",
+    "value": "unknown"
+   },
+   {
+    "goal": "compare(conductance, q-metal, morv)",
+    "state": "DERIVED",
+    "value": "q-metal > morv"
+   }
+  ],
+  "alternatives": [
+   "1.2 Q·t/(dg·tick) (from S1)",
+   "2 Q·t/(dg·tick) (from S2)"
+  ],
+  "laws": [],
+  "rationale": "Morvane conductance is 1.2 in S1 and 2.0 in S2, so the sources disagree and the value is CONFLICTED. The alternatives belong to value(morv, conductance), with 2.0 written as 2. For the comparison, qelt's 3 exceeds both alternatives, so the result is the same under either source.",
+  "spec_ambiguity": "compare(conductance, q-metal, morv): the spec says CONFLICTED whenever 'sources disagree', but here the disagreement cannot change the answer. I expect DERIVED 'q-metal > morv' (not over-abstaining), but a literal reading could give CONFLICTED. The spec also does not say whether comparing two handbook values is KNOWN or DERIVED."
+ },
+ {
+  "id": "H26",
+  "category": "CONFLICTED",
+  "english": "A morvane block at 5 Gdg touches a qelt block at 2.5 Gdg over a 5 tal contact path. What is the passage rate? Which way does thren flow? What color does the qelt glim?",
+  "input": "let m = morvane pell 5 Gdg\nlet q = qelt pell 2.5 Gdg\nrel touches q m span 5 t\nask rate q m\nask flows q m\nask glim q",
+  "expect": [
+   {
+    "goal": "rate(q, m)",
+    "state": "CONFLICTED",
+    "value": "unknown"
+   },
+   {
+    "goal": "flows(q, m)",
+    "state": "DERIVED",
+    "value": "m → q"
+   },
+   {
+    "goal": "glim(q)",
+    "state": "DERIVED",
+    "value": "none"
+   }
+  ],
+  "alternatives": [
+   "60 Q/tick (from S1)",
+   "100 Q/tick (from S2)"
+  ],
+  "laws": [
+   "L1",
+   "L2"
+  ],
+  "rationale": "m = 500, q = 250, difference 250 (valid), span 5. Morvane is the higher body, so its conductance is needed and the sources disagree: S1 gives 1.2*250/5 = 60, S2 gives 2*250/5 = 100. The alternatives belong to rate(q, m). The direction is still m → q. q at 250 < 500, so no glim.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H27",
+  "category": "CONFLICTED",
+  "english": "A qelt block is measured at 7 Gdg but is observed glimming blue. A morvane block sits at 300 dg. What color does the qelt glim, what is its pell, and what color does the morvane glim?",
+  "input": "let q = qelt pell 7 Gdg glim blue\nlet m = morvane pell 300 dg\nask glim q\nask pell q\nask glim m",
+  "expect": [
+   {
+    "goal": "glim(q)",
+    "state": "CONFLICTED",
+    "value": "unknown"
+   },
+   {
+    "goal": "pell(q)",
+    "state": "CONFLICTED",
+    "value": "unknown"
+   },
+   {
+    "goal": "glim(m)",
+    "state": "DERIVED",
+    "value": "none"
+   }
+  ],
+  "laws": [
+   "L2",
+   "L3"
+  ],
+  "rationale": "7 Gdg = 700 dg, which is green under L2 (blue is 500 <= pell < 700, and 700 is excluded), so the observed blue contradicts the given pell, and glim and pell are both CONFLICTED. The off-by-one at the boundary is the trap. The conflict stays local, so m (stonic) is none.",
+  "spec_ambiguity": "The spec says 'a given pell and an observed glim that disagree under L2 are CONFLICTED'. I read that as covering both glim(q) and pell(q)."
+ },
+ {
+  "id": "H28",
+  "category": "CONFLICTED",
+  "english": "A brask block at 300 dg is reported glimming green. A qelt block sits at 510 dg. What color does the brask glim, what is its pell, and what color does the qelt glim?",
+  "input": "let b = brask pell 300 dg glim green\nlet q = qelt pell 510 dg\nask glim b\nask pell b\nask glim q",
+  "expect": [
+   {
+    "goal": "glim(b)",
+    "state": "CONFLICTED",
+    "value": "unknown"
+   },
+   {
+    "goal": "pell(b)",
+    "state": "CONFLICTED",
+    "value": "unknown"
+   },
+   {
+    "goal": "glim(q)",
+    "state": "DERIVED",
+    "value": "blue"
+   }
+  ],
+  "laws": [
+   "L3",
+   "L2"
+  ],
+  "rationale": "L3: stonics never glim, so an observed glim other than none on a stonic is CONFLICTED, and so is asking its pell (stated explicitly in the spec). Unrelated questions are unaffected: 510 dg qelt is blue.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H29",
+  "category": "UNKNOWN_STRUCTURE",
+  "english": "A qelt block sits at 650 dg. What is its temperature? What is the density of qelt? What is the conductance of seph? What color does the qelt block glim?",
+  "input": "let q = qelt pell 650 dg\nask temperature q\nask value qelt density\nask value seph conductance\nask glim q",
+  "expect": [
+   {
+    "goal": "temperature(q)",
+    "state": "UNKNOWN_STRUCTURE",
+    "value": "unknown"
+   },
+   {
+    "goal": "value(qelt, density)",
+    "state": "UNKNOWN_STRUCTURE",
+    "value": "unknown"
+   },
+   {
+    "goal": "value(seph, conductance)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   },
+   {
+    "goal": "glim(q)",
+    "state": "DERIVED",
+    "value": "blue"
+   }
+  ],
+  "laws": [
+   "L2"
+  ],
+  "rationale": "'temperature' is not a question word, and 'density' is not an attribute, so both are UNKNOWN_STRUCTURE. Unlike unbound terms, structure failures fail only their own question. Seph conductance is not measured, so MISSING_KNOWLEDGE. 650 dg qelt is blue.",
+  "spec_ambiguity": "The spec does not say whether an unknown question word or attribute counts as an 'unbound term', which would fail every question with UNKNOWN_REFERENCE. I follow the explicit UNKNOWN_STRUCTURE rule and treat it as local. The goal label for an unknown question word is assumed to follow the same pattern, temperature(q)."
+ },
+ {
+  "id": "H30",
+  "category": "UNKNOWN_STRUCTURE",
+  "english": "A qelt block at 600 dg touches a morvane block at 300 dg over a 3 tal path. A kiv touches a brask block at 200 dg. There is also a puddle of ulm nearby. What color does the qelt glim, is the kiv harmed, and what is the passage rate between the qelt and the morvane?",
+  "input": "let q = qelt pell 600 dg\nlet m = morvane pell 300 dg\nlet b = brask pell 200 dg\nlet u = ulm\nlet k = kiv\nrel touches q m span 3 t\nrel touches k b\nask glim q\nask harmed k\nask rate q m",
+  "expect": [
+   {
+    "goal": "glim(q)",
+    "state": "UNKNOWN_STRUCTURE",
+    "value": "unknown"
+   },
+   {
+    "goal": "harmed(k)",
+    "state": "UNKNOWN_STRUCTURE",
+    "value": "unknown"
+   },
+   {
+    "goal": "rate(q, m)",
+    "state": "UNKNOWN_STRUCTURE",
+    "value": "unknown"
+   }
+  ],
+  "laws": [],
+  "rationale": "There are 5 entities, and 'touches' does not merge chunks (only wraps/soaks do), so there are 5 chunks, more than the limit of 4. The headspace limit is exceeded, so every question fails. A careless reader answers blue / no / 3*300/3 = 300 Q/tick.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H31",
+  "category": "AMBIGUOUS_PATTERN",
+  "english": "A qelt block at 600 dg touches a morvane block at 650 dg over a 2 tal path, and the two are also in line of sight of each other. Which way does thren flow between them? What is the contact passage rate?",
+  "input": "let q = qelt pell 600 dg\nlet m = morvane pell 650 dg\nrel touches q m span 2 t\nrel sight q m\nask flows q m\nask rate q m",
+  "expect": [
+   {
+    "goal": "flows(q, m)",
+    "state": "AMBIGUOUS_PATTERN",
+    "value": "unknown"
+   },
+   {
+    "goal": "rate(q, m)",
+    "state": "CONFLICTED",
+    "value": "unknown"
+   }
+  ],
+  "alternatives": [
+   "30 Q/tick (from S1)",
+   "50 Q/tick (from S2)"
+  ],
+  "laws": [
+   "L1",
+   "L4",
+   "L2"
+  ],
+  "rationale": "L1: m (650) > q (600), so m → q, resting on {pell q, pell m, touches}. L4: q at 600 dg glims blue, so q → m, resting on {pell q, sight}. These are opposite conclusions, and neither fact set is a superset of the other, so AMBIGUOUS_PATTERN. Rate is L1 only: difference 50, morvane higher. S1 gives 1.2*50/2 = 30, S2 gives 2*50/2 = 50, so CONFLICTED (the alternatives belong to rate).",
+  "spec_ambiguity": "'Neither rests on strictly more of the given facts' is ambiguous. Read as a proper superset, this is AMBIGUOUS_PATTERN (expected). Read as a count, L1 has 3 facts vs 2 for L4, so it would be DERIVED 'm → q'. The handbook's general sentence 'thren only ever flows from higher to lower pell' also sides with L1, but it is not a numbered law."
+ },
+ {
+  "id": "H32",
+  "category": "AMBIGUOUS_PATTERN",
+  "english": "A qelt block at 300 dg is wrapped in fenn (not soaked). A pool of ulm reaches under the wrap and touches the qelt itself, and also touches a morvane block at 100 dg. The morvane block also rests against the outside of the fenn wrap. Is there contact passage between the qelt and the morvane?",
+  "input": "let q = qelt pell 300 dg\nlet f = fenn\nlet u = ulm\nlet m = morvane pell 100 dg\nrel wraps f q\nrel touches u q\nrel touches u m\nrel touches m f\nask contact q m",
+  "expect": [
+   {
+    "goal": "contact(q, m)",
+    "state": "AMBIGUOUS_PATTERN",
+    "value": "unknown"
+   }
+  ],
+  "laws": [
+   "L6",
+   "L7"
+  ],
+  "rationale": "L7: u touches q and m, so it forms a contact path, giving yes, resting on {touches u q, touches u m}. L6: m touches the wrap around q, so contact passage between q and m is blocked, giving no, resting on {wraps f q, touches m f}. The sets are disjoint and equal in size, so this is ambiguous under either reading of 'strictly more'. Contrast with H07, where soaking makes L7's facts a superset. Chunks: {q,f}, u, m = 3.",
+  "spec_ambiguity": "L6 might be read as blocking only paths that go through the wrap, in which case contact would be DERIVED 'yes'. As written ('blocks contact passage between that body and anything touching the wrap'), L6 covers m, so it is expected to be AMBIGUOUS_PATTERN."
+ },
+ {
+  "id": "H33",
+  "category": "NO_VALID_RULE",
+  "english": "A pool of ulm is at 800 dg. What color does it glim? Does it glim at all? What class is ulm?",
+  "input": "let u = ulm pell 800 dg\nask glim u\nask has glim u\nask class ulm",
+  "expect": [
+   {
+    "goal": "glim(u)",
+    "state": "NO_VALID_RULE",
+    "value": "unknown"
+   },
+   {
+    "goal": "has(glim, u)",
+    "state": "NO_VALID_RULE",
+    "value": "unknown"
+   },
+   {
+    "goal": "class(ulm)",
+    "state": "KNOWN",
+    "value": "fluent"
+   }
+  ],
+  "laws": [],
+  "rationale": "L2 covers only qelt and L3 only stonics. Ulm's only sibling is seph (fluent), and no glim law covers seph, so there is nothing to borrow by analogy and nothing is confabulated. The careless answer is 'green'.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H34",
+  "category": "NO_VALID_RULE",
+  "english": "A qelt block at 9 Gdg is in line of sight of a kiv but does not touch it. Is the kiv harmed? Which way does thren flow between them? What color does the qelt glim?",
+  "input": "let q = qelt pell 9 Gdg\nlet k = kiv\nrel sight q k\nask harmed k\nask flows q k\nask glim q",
+  "expect": [
+   {
+    "goal": "harmed(k)",
+    "state": "NO_VALID_RULE",
+    "value": "unknown"
+   },
+   {
+    "goal": "flows(q, k)",
+    "state": "DERIVED",
+    "value": "q → k"
+   },
+   {
+    "goal": "glim(q)",
+    "state": "DERIVED",
+    "value": "red"
+   }
+  ],
+  "laws": [
+   "L5",
+   "L4",
+   "L2"
+  ],
+  "rationale": "Harm is contact-only (L5), and no body touches k, so NO_VALID_RULE. A careless reader says yes because of the radiant exposure. 9 Gdg = 900 dg is red (boundary >= 900), so q glims, and L4 gives q → k. The kiv's unknown pell is irrelevant to L4, so the model must not over-abstain.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H35",
+  "category": "NO_VALID_RULE",
+  "english": "A dornite block is seen glimming blue. A morvane block is in its line of sight (not touching). What is the dornite's pell? What color is the dornite? Which way does thren flow between the dornite and the morvane?",
+  "input": "let d = dornite glim blue\nlet m = morvane\nrel sight d m\nask pell d\nask glim d\nask flows d m",
+  "expect": [
+   {
+    "goal": "pell(d)",
+    "state": "NO_VALID_RULE",
+    "value": "unknown"
+   },
+   {
+    "goal": "glim(d)",
+    "state": "KNOWN",
+    "value": "blue"
+   },
+   {
+    "goal": "flows(d, m)",
+    "state": "DERIVED",
+    "value": "d → m"
+   }
+  ],
+  "laws": [
+   "L4"
+  ],
+  "rationale": "L2's color bands cover qelt only. Analogy applies only to glim/has glim questions, so a pell question gets no borrowed range, which is NO_VALID_RULE (careless: 500 to below 700 dg). The glim is given, so KNOWN. That observed glim is a given fact (not a confabulation), so L4 applies: d → m.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H36",
+  "category": "OUT_OF_BOUNDARY",
+  "english": "A qelt block at 9.01 Gdg touches a morvane block at 500 dg over a 4 tal path. What is the passage rate? Which way does thren flow? What color does the qelt glim?",
+  "input": "let q = qelt pell 9.01 Gdg\nlet m = morvane pell 500 dg\nrel touches q m span 4 t\nask rate q m\nask flows q m\nask glim q",
+  "expect": [
+   {
+    "goal": "rate(q, m)",
+    "state": "OUT_OF_BOUNDARY",
+    "value": "unknown"
+   },
+   {
+    "goal": "flows(q, m)",
+    "state": "DERIVED",
+    "value": "q → m"
+   },
+   {
+    "goal": "glim(q)",
+    "state": "DERIVED",
+    "value": "red"
+   }
+  ],
+  "laws": [
+   "L1",
+   "L2"
+  ],
+  "rationale": "9.01 Gdg = 901 dg, so the difference is 401 > 400 and the rate formula is invalid (just outside the boundary; compare H03 at exactly 400). The direction does not use the formula, so q → m. 901 >= 900 is red.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H37",
+  "category": "OUT_OF_BOUNDARY",
+  "english": "A morvane block at 900 dg touches a qelt block at 450 dg over a 3 tal path. The qelt also touches a brask block at 440 dg, with a recorded contact span of 0 tal. What is the rate between the morvane and the qelt? What is the rate between the qelt and the brask? Which way does thren flow between the qelt and the brask?",
+  "input": "let m = morvane pell 900 dg\nlet q = qelt pell 450 dg\nlet b = brask pell 440 dg\nrel touches m q span 3 t\nrel touches q b span 0 t\nask rate m q\nask rate q b\nask flows q b",
+  "expect": [
+   {
+    "goal": "rate(m, q)",
+    "state": "OUT_OF_BOUNDARY",
+    "value": "unknown"
+   },
+   {
+    "goal": "rate(q, b)",
+    "state": "OUT_OF_BOUNDARY",
+    "value": "unknown"
+   },
+   {
+    "goal": "flows(q, b)",
+    "state": "DERIVED",
+    "value": "q → b"
+   }
+  ],
+  "laws": [
+   "L1"
+  ],
+  "rationale": "m–q: the difference is 450 > 400. Boundaries are checked before computing, so this is OUT_OF_BOUNDARY, not CONFLICTED, even though morvane's conductance is disputed. q–b: span 0 <= 0 is invalid. Direction: 450 > 440, so q → b.",
+  "spec_ambiguity": "flows(q, b) assumes a touch with span 0 still counts as contact for L1's direction, since the span > 0 condition is stated only for the rate formula. A system could instead treat a zero-span touch as no contact."
+ },
+ {
+  "id": "H38",
+  "category": "CONFABULATED",
+  "english": "A dornite block is at 750 dg. What color does it glim? Does it glim at all?",
+  "input": "let d = dornite pell 750 dg\nask glim d\nask has glim d",
+  "expect": [
+   {
+    "goal": "glim(d)",
+    "state": "CONFABULATED",
+    "value": "possibly green"
+   },
+   {
+    "goal": "has(glim, d)",
+    "state": "CONFABULATED",
+    "value": "possibly yes"
+   }
+  ],
+  "laws": [
+   "L2"
+  ],
+  "rationale": "No law covers dornite, so the strict answer is NO_VALID_RULE. Its sibling qelt (metalline) is covered by L2, and 750 dg falls in the green band, so the answer is applied by analogy as possibly green / possibly yes, with an experiment.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H39",
+  "category": "CONFABULATED",
+  "english": "Suppose 'zuppan' is a new kind of metalline substance. A zuppan block is at 4.99 Gdg. Does it glim? What color? What class is zuppan?",
+  "input": "teach zuppan isa metalline\nlet z = zuppan pell 4.99 Gdg\nask has glim z\nask glim z\nask class zuppan",
+  "expect": [
+   {
+    "goal": "has(glim, z)",
+    "state": "CONFABULATED",
+    "value": "possibly no"
+   },
+   {
+    "goal": "glim(z)",
+    "state": "CONFABULATED",
+    "value": "possibly none"
+   },
+   {
+    "goal": "class(zuppan)",
+    "state": "KNOWN",
+    "value": "metalline"
+   }
+  ],
+  "laws": [
+   "L2"
+  ],
+  "rationale": "Taught under metalline, so its sibling is qelt. 4.99 Gdg = 499 dg < 500, so by analogy with L2 it does not glim (just below the band). It is confabulated because no law covers zuppan. The class is given by teach, so KNOWN. 'zuppan' is not a close spelling of any known term.",
+  "spec_ambiguity": ""
+ },
+ {
+  "id": "H40",
+  "category": "CONFABULATED",
+  "english": "A dornite block at 300 dg touches a morvane block at 100 dg over a 2 tal path. What is your best guess for dornite's conductance? What is your best guess for the passage rate between them? Which way does thren flow?",
+  "input": "let d = dornite pell 300 dg\nlet m = morvane pell 100 dg\nrel touches d m span 2 t\nestimate value dornite conductance\nestimate rate d m\nask flows d m",
+  "expect": [
+   {
+    "goal": "value(dornite, conductance)",
+    "state": "CONFABULATED",
+    "value": "possibly 3 Q·t/(dg·tick)"
+   },
+   {
+    "goal": "rate(d, m)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   },
+   {
+    "goal": "flows(d, m)",
+    "state": "DERIVED",
+    "value": "d → m"
+   }
+  ],
+  "laws": [
+   "L1"
+  ],
+  "rationale": "Estimating dornite's conductance: the strict answer is MISSING_KNOWLEDGE, so the value is borrowed from sibling qelt (3), giving possibly 3. Estimating the rate: numbers are borrowed ONLY for 'estimate value', so the rate stays MISSING_KNOWLEDGE (a careless reader computes 3*200/2 = 300). Direction: 300 > 100, so d → m.",
+  "spec_ambiguity": "The goal label for 'estimate' lines is assumed to be the same as for 'ask', e.g. value(dornite, conductance)."
+ }
+]

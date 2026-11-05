@@ -1,0 +1,47 @@
+name: Something went wrong
+description: CodeMonkey did something it shouldn't, or didn't do something it should.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: In your own words. What you did, what you expected, what you got instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can we see it too?
+      description: The steps, one per line, if you know them.
+      placeholder: |
+        1. Open a session in a Python project
+        2. Ask it to ...
+        3. ...
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Settings > What's new shows it.
+      placeholder: "0.0.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: system
+    attributes:
+      label: Computer
+      options:
+        - Windows
+        - Linux
+        - Raspberry Pi
+        - Mac
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: Anything else
+      description: >
+        Screenshots help. So does the zip from "Report a problem" (Ctrl K, or the Report this button on
+        an error); it blanks out keys and passwords, but have a look before you attach it.

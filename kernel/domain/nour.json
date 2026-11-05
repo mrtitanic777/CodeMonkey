@@ -1,0 +1,537 @@
+{
+ "tree": {
+  "ens": null,
+  "form": "ens",
+  "mass": "form",
+  "resonant": "mass",
+  "dullrock": "mass",
+  "seep": "mass",
+  "woven": "mass",
+  "living": "form",
+  "orrin": "resonant",
+  "veskite": "resonant",
+  "telkane": "dullrock",
+  "shalk": "dullrock",
+  "wettle": "seep",
+  "brume": "seep",
+  "loam": "woven",
+  "mote": "living"
+ },
+ "aliases": {
+  "o-tone": "orrin",
+  "telk": "telkane"
+ },
+ "matcher": {
+  "max_distance": 0.3
+ },
+ "words": [
+  "saph",
+  "vex",
+  "rod",
+  "beat",
+  "kilo"
+ ],
+ "quantities": {
+  "tarn": {
+   "unit": "vx",
+   "conversions": {
+    "Kvx": 1000
+   }
+  }
+ },
+ "categories": {
+  "keen": {
+   "values": [
+    "silent",
+    "treble",
+    "tenor",
+    "bass"
+   ],
+   "absent": "silent"
+  }
+ },
+ "attributes": {
+  "linkance": "S·rd/(vx·beat)",
+  "crack_threshold": "vx",
+  "resting_tarn": "vx"
+ },
+ "relations": {
+  "abuts": {
+   "symmetric": true,
+   "attrs": {
+    "reach": "rd"
+   }
+  },
+  "sheathes": {
+   "binds": true
+  },
+  "steeps": {
+   "binds": true
+  },
+  "hears": {
+   "symmetric": true
+  },
+  "link_path": {
+   "symmetric": true
+  },
+  "link": {
+   "symmetric": true
+  },
+  "link_flow": {
+   "directed": true
+  },
+  "chime_flow": {
+   "directed": true
+  },
+  "passes": {
+   "directed": true,
+   "exclusive": true
+  },
+  "cracked": {
+   "any": true
+  }
+ },
+ "facts": [
+  {
+   "term": "orrin",
+   "attr": "linkance",
+   "value": 1.5,
+   "source": "N-S1"
+  },
+  {
+   "term": "telkane",
+   "attr": "linkance",
+   "value": 0.6,
+   "source": "N-S1"
+  },
+  {
+   "term": "telkane",
+   "attr": "linkance",
+   "value": 1.0,
+   "source": "N-S2"
+  },
+  {
+   "term": "mote",
+   "attr": "resting_tarn",
+   "value": 100.0,
+   "source": "N-S1"
+  },
+  {
+   "term": "mote",
+   "attr": "crack_threshold",
+   "value": 225.0,
+   "source": "N-S1"
+  }
+ ],
+ "bands": [
+  {
+   "id": "N2",
+   "applies_to": [
+    "orrin"
+   ],
+   "quantity": "tarn",
+   "category": "keen",
+   "bands": [
+    {
+     "value": "silent",
+     "lo": null,
+     "hi": 2500.0
+    },
+    {
+     "value": "treble",
+     "lo": 2500.0,
+     "hi": 3500.0
+    },
+    {
+     "value": "tenor",
+     "lo": 3500.0,
+     "hi": 4500.0
+    },
+    {
+     "value": "bass",
+     "lo": 4500.0,
+     "hi": null
+    }
+   ]
+  },
+  {
+   "id": "N3",
+   "applies_to": [
+    "dullrock"
+   ],
+   "category": "keen",
+   "fixed": "silent"
+  }
+ ],
+ "rules": [
+  {
+   "id": "soak-wrap",
+   "note": "a seep soaking a wrap abuts what the wrap encloses",
+   "match": [
+    [
+     "steeps",
+     "?f",
+     "?w"
+    ],
+    [
+     "sheathes",
+     "?w",
+     "?x"
+    ]
+   ],
+   "conclude": [
+    "abuts",
+    "?f",
+    "?x"
+   ]
+  },
+  {
+   "id": "soak-touch",
+   "note": "a seep soaking a wrap abuts what abuts the wrap",
+   "match": [
+    [
+     "steeps",
+     "?f",
+     "?w"
+    ],
+    [
+     "abuts",
+     "?y",
+     "?w"
+    ]
+   ],
+   "conclude": [
+    "abuts",
+    "?f",
+    "?y"
+   ]
+  },
+  {
+   "id": "N7",
+   "match": [
+    [
+     "isa",
+     "?f",
+     "seep"
+    ],
+    [
+     "abuts",
+     "?f",
+     "?x"
+    ],
+    [
+     "abuts",
+     "?f",
+     "?y"
+    ]
+   ],
+   "distinct": [
+    [
+     "?x",
+     "?y"
+    ],
+    [
+     "?f",
+     "?x"
+    ],
+    [
+     "?f",
+     "?y"
+    ]
+   ],
+   "conclude": [
+    "link_path",
+    "?x",
+    "?y"
+   ]
+  },
+  {
+   "id": "direct-contact",
+   "match": [
+    [
+     "abuts",
+     "?x",
+     "?y"
+    ]
+   ],
+   "conclude": [
+    "link",
+    "?x",
+    "?y"
+   ]
+  },
+  {
+   "id": "path-contact",
+   "match": [
+    [
+     "link_path",
+     "?x",
+     "?y"
+    ]
+   ],
+   "conclude": [
+    "link",
+    "?x",
+    "?y"
+   ]
+  },
+  {
+   "id": "N6",
+   "match": [
+    [
+     "isa",
+     "?w",
+     "loam"
+    ],
+    [
+     "sheathes",
+     "?w",
+     "?x"
+    ],
+    [
+     "abuts",
+     "?y",
+     "?w"
+    ]
+   ],
+   "distinct": [
+    [
+     "?x",
+     "?y"
+    ]
+   ],
+   "conclude": [
+    "link",
+    "?x",
+    "?y"
+   ],
+   "polarity": false
+  },
+  {
+   "id": "N1",
+   "note": "link channel",
+   "match": [
+    [
+     "link",
+     "?a",
+     "?b"
+    ]
+   ],
+   "conditions": [
+    [
+     "gt",
+     [
+      "q",
+      "tarn",
+      "?a"
+     ],
+     [
+      "q",
+      "tarn",
+      "?b"
+     ]
+    ]
+   ],
+   "conclude": [
+    "link_flow",
+    "?a",
+    "?b"
+   ]
+  },
+  {
+   "id": "N4",
+   "note": "chiming channel; the handbook's 'only ever from higher to lower tarn' binds it too",
+   "match": [
+    [
+     "hears",
+     "?a",
+     "?b"
+    ]
+   ],
+   "conditions": [
+    [
+     "neq",
+     [
+      "c",
+      "keen",
+      "?a"
+     ],
+     "silent"
+    ],
+    [
+     "gt",
+     [
+      "q",
+      "tarn",
+      "?a"
+     ],
+     [
+      "q",
+      "tarn",
+      "?b"
+     ]
+    ]
+   ],
+   "conclude": [
+    "chime_flow",
+    "?a",
+    "?b"
+   ]
+  },
+  {
+   "id": "flow-contact",
+   "match": [
+    [
+     "link_flow",
+     "?a",
+     "?b"
+    ]
+   ],
+   "conclude": [
+    "passes",
+    "?a",
+    "?b"
+   ]
+  },
+  {
+   "id": "flow-radiant",
+   "match": [
+    [
+     "chime_flow",
+     "?a",
+     "?b"
+    ]
+   ],
+   "conclude": [
+    "passes",
+    "?a",
+    "?b"
+   ]
+  },
+  {
+   "id": "N5",
+   "match": [
+    [
+     "abuts",
+     "?x",
+     "?k"
+    ],
+    [
+     "isa",
+     "?k",
+     "mote"
+    ]
+   ],
+   "conditions": [
+    [
+     "gt",
+     [
+      "q",
+      "tarn",
+      "?x"
+     ],
+     [
+      "a",
+      "?k",
+      "crack_threshold"
+     ]
+    ]
+   ],
+   "conclude": [
+    "cracked",
+    "?k"
+   ]
+  },
+  {
+   "id": "N5-safe",
+   "match": [
+    [
+     "abuts",
+     "?x",
+     "?k"
+    ],
+    [
+     "isa",
+     "?k",
+     "mote"
+    ]
+   ],
+   "conditions": [
+    [
+     "le",
+     [
+      "q",
+      "tarn",
+      "?x"
+     ],
+     [
+      "a",
+      "?k",
+      "crack_threshold"
+     ]
+    ]
+   ],
+   "conclude": [
+    "cracked",
+    "?k"
+   ],
+   "polarity": false
+  }
+ ],
+ "operations": [
+  {
+   "id": "N1-rate",
+   "goal": "rate",
+   "match": [
+    [
+     "link",
+     "?a",
+     "?b"
+    ]
+   ],
+   "orient": [
+    "gt",
+    [
+     "q",
+     "tarn",
+     "?a"
+    ],
+    [
+     "q",
+     "tarn",
+     "?b"
+    ]
+   ],
+   "inputs": {
+    "k": [
+     "a",
+     "?a",
+     "linkance"
+    ],
+    "pa": [
+     "q",
+     "tarn",
+     "?a"
+    ],
+    "pb": [
+     "q",
+     "tarn",
+     "?b"
+    ],
+    "s": [
+     "r",
+     "abuts",
+     "?a",
+     "?b",
+     "reach"
+    ]
+   },
+   "formula": "k * (pa - pb) / s",
+   "unit": "S/beat",
+   "boundary": [
+    "pa - pb <= 2000",
+    "s > 0"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,1015 @@
+[
+ {
+  "id": "N-H01",
+  "category": "DERIVED",
+  "mirror_of": "H01",
+  "english": "A block of orrin holds a tarn of 7 kilo vex (Gdg). What color does it keen, and does it keen at all?",
+  "input": "let q = orrin tarn 3.5 Kvx\nask keen q\nask has keen q",
+  "expect": [
+   {
+    "goal": "keen(q)",
+    "state": "DERIVED",
+    "value": "tenor"
+   },
+   {
+    "goal": "has(keen, q)",
+    "state": "DERIVED",
+    "value": "yes"
+   }
+  ],
+  "laws": [
+   "N2"
+  ]
+ },
+ {
+  "id": "N-H02",
+  "category": "DERIVED",
+  "mirror_of": "H02",
+  "english": "A orrin block was recorded at 2250 vx and someone noted it glimming treble. Its tarn was then raised by 1250 vx, and the earlier keen note no longer applies. A telkane block sits at 3.5 Gdg. What color does the orrin keen now? How does the orrin's tarn compare with the telkane's? What color does the telkane keen?",
+  "input": "let q = orrin tarn 2250 vx keen treble\nlet m = telkane tarn 3.5 Kvx\nshift q tarn 1250 vx\nask keen q\nask compare tarn q m\nask keen m",
+  "expect": [
+   {
+    "goal": "keen(q)",
+    "state": "DERIVED",
+    "value": "tenor"
+   },
+   {
+    "goal": "compare(tarn, q, m)",
+    "state": "DERIVED",
+    "value": "q = m"
+   },
+   {
+    "goal": "keen(m)",
+    "state": "DERIVED",
+    "value": "silent"
+   }
+  ],
+  "laws": [
+   "N2",
+   "N3"
+  ]
+ },
+ {
+  "id": "N-H03",
+  "category": "DERIVED",
+  "mirror_of": "H03",
+  "english": "A orrin block at 4.5 Gdg abuts a telkane block at 2500 vx along a 4 rod link path. It also abuts a shalk block at 4.45 Gdg, again along a 4 rod path. What is the link passage rate between the orrin and the telkane, and between the orrin and the shalk? Which way does saph flow between the telkane and the orrin?",
+  "input": "let q = orrin tarn 4.5 Kvx\nlet m = telkane tarn 2500 vx\nlet b = shalk tarn 4.45 Kvx\nrel abuts q m reach 8 rd\nrel abuts q b reach 8 rd\nask rate q m\nask rate q b\nask passes m q",
+  "expect": [
+   {
+    "goal": "rate(q, m)",
+    "state": "DERIVED",
+    "value": "375 S/beat"
+   },
+   {
+    "goal": "rate(q, b)",
+    "state": "DERIVED",
+    "value": "9.375 S/beat"
+   },
+   {
+    "goal": "passes(m, q)",
+    "state": "DERIVED",
+    "value": "q → m"
+   }
+  ],
+  "laws": [
+   "N1"
+  ]
+ },
+ {
+  "id": "N-H04",
+  "category": "DERIVED",
+  "mirror_of": "H04",
+  "english": "A mote (living tissue) is touching a orrin block that is seen glimming treble. No tarn was measured. What can be said about the orrin's tarn, what color is it, and is the mote cracked?",
+  "input": "let q = orrin keen treble\nlet k = mote\nrel abuts k q\nask tarn q\nask keen q\nask cracked k",
+  "expect": [
+   {
+    "goal": "tarn(q)",
+    "state": "DERIVED",
+    "value": "from 2500 to below 3500 vx"
+   },
+   {
+    "goal": "keen(q)",
+    "state": "KNOWN",
+    "value": "treble"
+   },
+   {
+    "goal": "cracked(k)",
+    "state": "DERIVED",
+    "value": "yes"
+   }
+  ],
+  "laws": [
+   "N2",
+   "N5"
+  ]
+ },
+ {
+  "id": "N-H05",
+  "category": "DERIVED",
+  "mirror_of": "H05",
+  "english": "A orrin block seen glimming treble abuts a shalk block at exactly 3500 vx over a 3 rod path. Which way does saph flow between them? What color does the shalk keen? What is the passage rate?",
+  "input": "let q = orrin keen treble\nlet b = shalk tarn 3500 vx\nrel abuts q b reach 6 rd\nask passes q b\nask keen b\nask rate q b",
+  "expect": [
+   {
+    "goal": "passes(q, b)",
+    "state": "DERIVED",
+    "value": "b → q"
+   },
+   {
+    "goal": "keen(b)",
+    "state": "DERIVED",
+    "value": "silent"
+   },
+   {
+    "goal": "rate(q, b)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   }
+  ],
+  "laws": [
+   "N1",
+   "N2",
+   "N3"
+  ]
+ },
+ {
+  "id": "N-H06",
+  "category": "DERIVED",
+  "mirror_of": "H06",
+  "english": "A orrin block at 1500 vx and a telkane block at 500 vx do not touch each other directly, but a puddle of brume abuts both. Is there link passage between the orrin and the telkane? Which way does saph flow between them? What is the passage rate?",
+  "input": "let q = orrin tarn 1500 vx\nlet m = telkane tarn 500 vx\nlet s = brume\nrel abuts s q\nrel abuts s m\nask link q m\nask passes m q\nask rate q m",
+  "expect": [
+   {
+    "goal": "link(q, m)",
+    "state": "DERIVED",
+    "value": "yes"
+   },
+   {
+    "goal": "passes(m, q)",
+    "state": "DERIVED",
+    "value": "q → m"
+   },
+   {
+    "goal": "rate(q, m)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   }
+  ],
+  "laws": [
+   "N7",
+   "N1"
+  ]
+ },
+ {
+  "id": "N-H07",
+  "category": "DERIVED",
+  "mirror_of": "H07",
+  "english": "A orrin block at 2000 vx is wrapped in loam, and the loam wrap is soaked with wettle. A telkane block at 750 vx rests against the outside of the wrap. Is there link passage between the orrin and the telkane? Which way does saph flow? What is the passage rate?",
+  "input": "let q = orrin tarn 2000 vx\nlet f = loam\nlet u = wettle\nlet m = telkane tarn 750 vx\nrel sheathes f q\nrel steeps u f\nrel abuts m f\nask link q m\nask passes q m\nask rate q m",
+  "expect": [
+   {
+    "goal": "link(q, m)",
+    "state": "DERIVED",
+    "value": "yes"
+   },
+   {
+    "goal": "passes(q, m)",
+    "state": "DERIVED",
+    "value": "q → m"
+   },
+   {
+    "goal": "rate(q, m)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   }
+  ],
+  "laws": [
+   "N6",
+   "N7",
+   "N1"
+  ]
+ },
+ {
+  "id": "N-H08",
+  "category": "DERIVED",
+  "mirror_of": "H08",
+  "english": "A orrin block at 4100 vx is wrapped in loam (not soaked). A shalk block at 1500 vx rests against the wrap over a 2 rod path, and the shalk is also in direct line of hears of the orrin. Is there link passage between the orrin and the shalk? Which way does saph flow between them? What color does the orrin keen?",
+  "input": "let q = orrin tarn 4100 vx\nlet f = loam\nlet b = shalk tarn 1500 vx\nrel sheathes f q\nrel abuts b f reach 4 rd\nrel hears q b\nask link q b\nask passes q b\nask keen q",
+  "expect": [
+   {
+    "goal": "link(q, b)",
+    "state": "DERIVED",
+    "value": "no"
+   },
+   {
+    "goal": "passes(q, b)",
+    "state": "DERIVED",
+    "value": "q → b"
+   },
+   {
+    "goal": "keen(q)",
+    "state": "DERIVED",
+    "value": "tenor"
+   }
+  ],
+  "laws": [
+   "N6",
+   "N4",
+   "N2"
+  ]
+ },
+ {
+  "id": "N-H09",
+  "category": "DERIVED",
+  "mirror_of": "H09",
+  "english": "Two pieces of mote, k1 and k2. k1 abuts a telkane block at exactly 225 vx. k2 abuts the same telkane block and also a orrin block at 0.23 Gdg. Is k1 cracked? Is k2 cracked?",
+  "input": "let k1 = mote\nlet k2 = mote\nlet m = telkane tarn 225 vx\nlet q = orrin tarn 0.23 Kvx\nrel abuts k1 m\nrel abuts k2 m\nrel abuts k2 q\nask cracked k1\nask cracked k2",
+  "expect": [
+   {
+    "goal": "cracked(k1)",
+    "state": "DERIVED",
+    "value": "no"
+   },
+   {
+    "goal": "cracked(k2)",
+    "state": "DERIVED",
+    "value": "yes"
+   }
+  ],
+  "laws": [
+   "N5"
+  ]
+ },
+ {
+  "id": "N-H10",
+  "category": "DERIVED",
+  "mirror_of": "H10",
+  "english": "Suppose 'brimmel' is a new kind of dullrock mass. A brimmel block holds 4.75 Gdg. What color does it keen, does it keen at all, and what class is brimmel?",
+  "input": "teach brimmel isa dullrock\nlet v = brimmel tarn 4.75 Kvx\nask keen v\nask has keen v\nask class brimmel",
+  "expect": [
+   {
+    "goal": "keen(v)",
+    "state": "DERIVED",
+    "value": "silent"
+   },
+   {
+    "goal": "has(keen, v)",
+    "state": "DERIVED",
+    "value": "no"
+   },
+   {
+    "goal": "class(brimmel)",
+    "state": "KNOWN",
+    "value": "dullrock"
+   }
+  ],
+  "laws": [
+   "N3"
+  ]
+ },
+ {
+  "id": "N-H11",
+  "category": "DERIVED",
+  "mirror_of": "H11",
+  "english": "A orrin block at 4400 vx is wrapped in loam soaked with brume. A telkane block at 2400 vx rests against the wrap. Separately, a mote abuts a shalk block at 225 vx. Is there link passage between the orrin and the telkane? Which way does saph flow between them? Is the mote cracked?",
+  "input": "let q = orrin tarn 4400 vx\nlet f = loam\nlet s = brume\nlet m = telkane tarn 2400 vx\nlet k = mote\nlet b = shalk tarn 225 vx\nrel sheathes f q\nrel steeps s f\nrel abuts m f\nrel abuts k b\nask link q m\nask passes q m\nask cracked k",
+  "expect": [
+   {
+    "goal": "link(q, m)",
+    "state": "DERIVED",
+    "value": "yes"
+   },
+   {
+    "goal": "passes(q, m)",
+    "state": "DERIVED",
+    "value": "q → m"
+   },
+   {
+    "goal": "cracked(k)",
+    "state": "DERIVED",
+    "value": "no"
+   }
+  ],
+  "laws": [
+   "N6",
+   "N7",
+   "N1",
+   "N5"
+  ]
+ },
+ {
+  "id": "N-H12",
+  "category": "KNOWN",
+  "mirror_of": "H12",
+  "english": "What is the linkance of o-tone? What is the harm threshold of mote? What class of mass is telk?",
+  "input": "ask value o-tone linkance\nask value mote crack_threshold\nask class telk",
+  "expect": [
+   {
+    "goal": "value(o-tone, linkance)",
+    "state": "KNOWN",
+    "value": "1.5 S·rd/(vx·beat)"
+   },
+   {
+    "goal": "value(mote, crack_threshold)",
+    "state": "KNOWN",
+    "value": "225 vx"
+   },
+   {
+    "goal": "class(telk)",
+    "state": "KNOWN",
+    "value": "dullrock"
+   }
+  ]
+ },
+ {
+  "id": "N-H13",
+  "category": "KNOWN",
+  "mirror_of": "H13",
+  "english": "A orrin block is at 1.75 Gdg and is observed not glimming. A mote touching it has a measured tarn of 100 vx, over a 5 rod link path. What is the orrin's tarn in vx, what is its keen, what is the mote's tarn, how do the two pells compare, and what is the passage rate?",
+  "input": "let q = orrin tarn 1.75 Kvx keen silent\nlet k = mote tarn 100 vx\nrel abuts q k reach 10 rd\nask tarn q\nask keen q\nask tarn k\nask compare tarn q k\nask rate q k",
+  "expect": [
+   {
+    "goal": "tarn(q)",
+    "state": "KNOWN",
+    "value": "1750 vx"
+   },
+   {
+    "goal": "keen(q)",
+    "state": "KNOWN",
+    "value": "silent"
+   },
+   {
+    "goal": "tarn(k)",
+    "state": "KNOWN",
+    "value": "100 vx"
+   },
+   {
+    "goal": "compare(tarn, q, k)",
+    "state": "DERIVED",
+    "value": "q > k"
+   },
+   {
+    "goal": "rate(q, k)",
+    "state": "DERIVED",
+    "value": "247.5 S/beat"
+   }
+  ],
+  "laws": [
+   "N1",
+   "N2"
+  ]
+ },
+ {
+  "id": "N-H14",
+  "category": "KNOWN",
+  "mirror_of": "H14",
+  "english": "Earlier feedback confirmed that 'veskiet' is just a misspelling of veskite. A veskiet block sits at 1000 vx. What class is veskiet, what is the block's tarn, and what is your best estimate of orrin's linkance?",
+  "input": "confirm veskiet means veskite\nlet d = veskiet tarn 1000 vx\nask class veskiet\nask tarn d\nestimate value orrin linkance",
+  "expect": [
+   {
+    "goal": "class(veskiet)",
+    "state": "KNOWN",
+    "value": "resonant"
+   },
+   {
+    "goal": "tarn(d)",
+    "state": "KNOWN",
+    "value": "1000 vx"
+   },
+   {
+    "goal": "value(orrin, linkance)",
+    "state": "KNOWN",
+    "value": "1.5 S·rd/(vx·beat)"
+   }
+  ]
+ },
+ {
+  "id": "N-H15",
+  "category": "UNKNOWN_REFERENCE",
+  "mirror_of": "H15",
+  "english": "A moxi abuts a telkane block at 300 vx. Is the moxi cracked? What color does the telkane keen?",
+  "input": "let k = moxi\nlet m = telkane tarn 300 vx\nrel abuts k m\nask cracked k\nask keen m",
+  "expect": [
+   {
+    "goal": "cracked(k)",
+    "state": "UNKNOWN_REFERENCE",
+    "value": "unknown"
+   },
+   {
+    "goal": "keen(m)",
+    "state": "UNKNOWN_REFERENCE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-H16",
+  "category": "UNKNOWN_REFERENCE",
+  "mirror_of": "H16",
+  "english": "A tulkain block at 1500 vx abuts a orrin block at 3000 vx over a 3 rod path. What is the passage rate, and what color does the orrin keen?",
+  "input": "let m = tulkain tarn 1500 vx\nlet q = orrin tarn 3000 vx\nrel abuts q m reach 6 rd\nask rate q m\nask keen q",
+  "expect": [
+   {
+    "goal": "rate(q, m)",
+    "state": "UNKNOWN_REFERENCE",
+    "value": "unknown"
+   },
+   {
+    "goal": "keen(q)",
+    "state": "UNKNOWN_REFERENCE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-H17",
+  "category": "UNKNOWN_REFERENCE",
+  "mirror_of": "H17",
+  "english": "A mote abuts a orrin block at 4750 vx. Is the mote cracked? Is k2 cracked? (No k2 was ever described.)",
+  "input": "let q = orrin tarn 4750 vx\nlet k = mote\nrel abuts k q\nask cracked k\nask cracked k2",
+  "expect": [
+   {
+    "goal": "cracked(k)",
+    "state": "UNKNOWN_REFERENCE",
+    "value": "unknown"
+   },
+   {
+    "goal": "cracked(k2)",
+    "state": "UNKNOWN_REFERENCE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-H18",
+  "category": "LOW_CONFIDENCE",
+  "mirror_of": "H18",
+  "english": "A mote abuts a telkain block at 1 Gdg. Is the mote cracked? What class is telkain?",
+  "input": "let m = telkain tarn 1 Kvx\nlet k = mote\nrel abuts k m\nask cracked k\nask class telkain",
+  "expect": [
+   {
+    "goal": "cracked(k)",
+    "state": "LOW_CONFIDENCE",
+    "value": "unknown"
+   },
+   {
+    "goal": "class(telkain)",
+    "state": "LOW_CONFIDENCE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-H19",
+  "category": "LOW_CONFIDENCE",
+  "mirror_of": "H19",
+  "english": "A motee abuts a orrin block at 200 vx. Is the motee cracked? What color does the orrin keen?",
+  "input": "let k = motee\nlet q = orrin tarn 200 vx\nrel abuts k q\nask cracked k\nask keen q",
+  "expect": [
+   {
+    "goal": "cracked(k)",
+    "state": "LOW_CONFIDENCE",
+    "value": "unknown"
+   },
+   {
+    "goal": "keen(q)",
+    "state": "LOW_CONFIDENCE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-H20",
+  "category": "LOW_CONFIDENCE",
+  "mirror_of": "H20",
+  "english": "A orrin block at 3750 vx is observed to keen tenr. What color does it keen, and what is its tarn?",
+  "input": "let q = orrin tarn 3750 vx keen tenr\nask keen q\nask tarn q",
+  "expect": [
+   {
+    "goal": "keen(q)",
+    "state": "LOW_CONFIDENCE",
+    "value": "unknown"
+   },
+   {
+    "goal": "tarn(q)",
+    "state": "LOW_CONFIDENCE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-H21",
+  "category": "MISSING_KNOWLEDGE",
+  "mirror_of": "H21",
+  "english": "A orrin block at 300 vx abuts a mote over a 2 rod link path. The mote's tarn was not measured. What is the passage rate, which way does saph flow, and is the mote cracked?",
+  "input": "let q = orrin tarn 300 vx\nlet k = mote\nrel abuts q k reach 4 rd\nask rate q k\nask passes q k\nask cracked k",
+  "expect": [
+   {
+    "goal": "rate(q, k)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   },
+   {
+    "goal": "passes(q, k)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   },
+   {
+    "goal": "cracked(k)",
+    "state": "DERIVED",
+    "value": "yes"
+   }
+  ],
+  "laws": [
+   "N1",
+   "N5"
+  ]
+ },
+ {
+  "id": "N-H22",
+  "category": "MISSING_KNOWLEDGE",
+  "mirror_of": "H22",
+  "english": "A mote abuts a orrin block that is observed not glimming. There is also a telkane block at 2250 vx and a shalk block at 2500 vx (neither abuts anything). Is the mote cracked? What can be said about the orrin's tarn? How does the orrin's tarn compare with the telkane's, and with the shalk's?",
+  "input": "let q = orrin keen silent\nlet k = mote\nlet m = telkane tarn 2250 vx\nlet b = shalk tarn 2500 vx\nrel abuts k q\nask cracked k\nask tarn q\nask compare tarn q m\nask compare tarn q b",
+  "expect": [
+   {
+    "goal": "cracked(k)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   },
+   {
+    "goal": "tarn(q)",
+    "state": "DERIVED",
+    "value": "below 2500 vx"
+   },
+   {
+    "goal": "compare(tarn, q, m)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   },
+   {
+    "goal": "compare(tarn, q, b)",
+    "state": "DERIVED",
+    "value": "q < b"
+   }
+  ],
+  "laws": [
+   "N2",
+   "N5"
+  ]
+ },
+ {
+  "id": "N-H23",
+  "category": "MISSING_KNOWLEDGE",
+  "mirror_of": "H23",
+  "english": "What is the linkance of veskite? What is your best guess for the linkance of wettle? What is mote's resting tarn?",
+  "input": "ask value veskite linkance\nestimate value wettle linkance\nask value mote resting_tarn",
+  "expect": [
+   {
+    "goal": "value(veskite, linkance)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   },
+   {
+    "goal": "value(wettle, linkance)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   },
+   {
+    "goal": "value(mote, resting_tarn)",
+    "state": "KNOWN",
+    "value": "100 vx"
+   }
+  ]
+ },
+ {
+  "id": "N-H24",
+  "category": "MISSING_KNOWLEDGE",
+  "mirror_of": "H24",
+  "english": "A orrin block was seen glimming treble; its tarn was never measured. Then its tarn was raised by 500 vx, and the earlier keen observation no longer applies. What color does it keen now?",
+  "input": "let q = orrin keen treble\nshift q tarn 500 vx\nask keen q",
+  "expect": [
+   {
+    "goal": "keen(q)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   }
+  ],
+  "laws": [
+   "N2"
+  ]
+ },
+ {
+  "id": "N-H25",
+  "category": "CONFLICTED",
+  "mirror_of": "H25",
+  "english": "What is the linkance of telk? Is o-tone's linkance greater than, less than, or equal to telk's?",
+  "input": "ask value telk linkance\nask compare linkance o-tone telk",
+  "expect": [
+   {
+    "goal": "value(telk, linkance)",
+    "state": "CONFLICTED",
+    "value": "unknown"
+   },
+   {
+    "goal": "compare(linkance, o-tone, telk)",
+    "state": "DERIVED",
+    "value": "o-tone > telk"
+   }
+  ]
+ },
+ {
+  "id": "N-H26",
+  "category": "CONFLICTED",
+  "mirror_of": "H26",
+  "english": "A telkane block at 2.5 Gdg abuts a orrin block at 1.25 Gdg over a 5 rod link path. What is the passage rate? Which way does saph flow? What color does the orrin keen?",
+  "input": "let m = telkane tarn 2.5 Kvx\nlet q = orrin tarn 1.25 Kvx\nrel abuts q m reach 10 rd\nask rate q m\nask passes q m\nask keen q",
+  "expect": [
+   {
+    "goal": "rate(q, m)",
+    "state": "CONFLICTED",
+    "value": "unknown"
+   },
+   {
+    "goal": "passes(q, m)",
+    "state": "DERIVED",
+    "value": "m → q"
+   },
+   {
+    "goal": "keen(q)",
+    "state": "DERIVED",
+    "value": "silent"
+   }
+  ],
+  "laws": [
+   "N1",
+   "N2"
+  ]
+ },
+ {
+  "id": "N-H27",
+  "category": "CONFLICTED",
+  "mirror_of": "H27",
+  "english": "A orrin block is measured at 3.5 Gdg but is observed glimming treble. A telkane block sits at 1500 vx. What color does the orrin keen, what is its tarn, and what color does the telkane keen?",
+  "input": "let q = orrin tarn 3.5 Kvx keen treble\nlet m = telkane tarn 1500 vx\nask keen q\nask tarn q\nask keen m",
+  "expect": [
+   {
+    "goal": "keen(q)",
+    "state": "CONFLICTED",
+    "value": "unknown"
+   },
+   {
+    "goal": "tarn(q)",
+    "state": "CONFLICTED",
+    "value": "unknown"
+   },
+   {
+    "goal": "keen(m)",
+    "state": "DERIVED",
+    "value": "silent"
+   }
+  ],
+  "laws": [
+   "N2",
+   "N3"
+  ]
+ },
+ {
+  "id": "N-H28",
+  "category": "CONFLICTED",
+  "mirror_of": "H28",
+  "english": "A shalk block at 1500 vx is reported glimming tenor. A orrin block sits at 2550 vx. What color does the shalk keen, what is its tarn, and what color does the orrin keen?",
+  "input": "let b = shalk tarn 1500 vx keen tenor\nlet q = orrin tarn 2550 vx\nask keen b\nask tarn b\nask keen q",
+  "expect": [
+   {
+    "goal": "keen(b)",
+    "state": "CONFLICTED",
+    "value": "unknown"
+   },
+   {
+    "goal": "tarn(b)",
+    "state": "CONFLICTED",
+    "value": "unknown"
+   },
+   {
+    "goal": "keen(q)",
+    "state": "DERIVED",
+    "value": "treble"
+   }
+  ],
+  "laws": [
+   "N3",
+   "N2"
+  ]
+ },
+ {
+  "id": "N-H29",
+  "category": "UNKNOWN_STRUCTURE",
+  "mirror_of": "H29",
+  "english": "A orrin block sits at 3250 vx. What is its temperature? What is the density of orrin? What is the linkance of brume? What color does the orrin block keen?",
+  "input": "let q = orrin tarn 3250 vx\nask temperature q\nask value orrin density\nask value brume linkance\nask keen q",
+  "expect": [
+   {
+    "goal": "temperature(q)",
+    "state": "UNKNOWN_STRUCTURE",
+    "value": "unknown"
+   },
+   {
+    "goal": "value(orrin, density)",
+    "state": "UNKNOWN_STRUCTURE",
+    "value": "unknown"
+   },
+   {
+    "goal": "value(brume, linkance)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   },
+   {
+    "goal": "keen(q)",
+    "state": "DERIVED",
+    "value": "treble"
+   }
+  ],
+  "laws": [
+   "N2"
+  ]
+ },
+ {
+  "id": "N-H30",
+  "category": "UNKNOWN_STRUCTURE",
+  "mirror_of": "H30",
+  "english": "A orrin block at 3000 vx abuts a telkane block at 1500 vx over a 3 rod path. A mote abuts a shalk block at 1000 vx. There is also a puddle of wettle nearby. What color does the orrin keen, is the mote cracked, and what is the passage rate between the orrin and the telkane?",
+  "input": "let q = orrin tarn 3000 vx\nlet m = telkane tarn 1500 vx\nlet b = shalk tarn 1000 vx\nlet u = wettle\nlet k = mote\nrel abuts q m reach 6 rd\nrel abuts k b\nask keen q\nask cracked k\nask rate q m",
+  "expect": [
+   {
+    "goal": "keen(q)",
+    "state": "UNKNOWN_STRUCTURE",
+    "value": "unknown"
+   },
+   {
+    "goal": "cracked(k)",
+    "state": "UNKNOWN_STRUCTURE",
+    "value": "unknown"
+   },
+   {
+    "goal": "rate(q, m)",
+    "state": "UNKNOWN_STRUCTURE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-H31",
+  "category": "AMBIGUOUS_PATTERN",
+  "mirror_of": "H31",
+  "english": "A orrin block at 3000 vx abuts a telkane block at 3250 vx over a 2 rod path, and the two are also in line of hears of each other. Which way does saph flow between them? What is the link passage rate?",
+  "input": "let q = orrin tarn 3000 vx\nlet m = telkane tarn 3250 vx\nrel abuts q m reach 4 rd\nrel hears q m\nask passes q m\nask rate q m",
+  "expect": [
+   {
+    "goal": "passes(q, m)",
+    "state": "AMBIGUOUS_PATTERN",
+    "value": "unknown"
+   },
+   {
+    "goal": "rate(q, m)",
+    "state": "CONFLICTED",
+    "value": "unknown"
+   }
+  ],
+  "laws": [
+   "N1",
+   "N4",
+   "N2"
+  ]
+ },
+ {
+  "id": "N-H32",
+  "category": "AMBIGUOUS_PATTERN",
+  "mirror_of": "H32",
+  "english": "A orrin block at 1500 vx is wrapped in loam (not soaked). A pool of wettle reaches under the wrap and abuts the orrin itself, and also abuts a telkane block at 500 vx. The telkane block also rests against the outside of the loam wrap. Is there link passage between the orrin and the telkane?",
+  "input": "let q = orrin tarn 1500 vx\nlet f = loam\nlet u = wettle\nlet m = telkane tarn 500 vx\nrel sheathes f q\nrel abuts u q\nrel abuts u m\nrel abuts m f\nask link q m",
+  "expect": [
+   {
+    "goal": "link(q, m)",
+    "state": "AMBIGUOUS_PATTERN",
+    "value": "unknown"
+   }
+  ],
+  "laws": [
+   "N6",
+   "N7"
+  ]
+ },
+ {
+  "id": "N-H33",
+  "category": "NO_VALID_RULE",
+  "mirror_of": "H33",
+  "english": "A pool of wettle is at 4000 vx. What color does it keen? Does it keen at all? What class is wettle?",
+  "input": "let u = wettle tarn 4000 vx\nask keen u\nask has keen u\nask class wettle",
+  "expect": [
+   {
+    "goal": "keen(u)",
+    "state": "NO_VALID_RULE",
+    "value": "unknown"
+   },
+   {
+    "goal": "has(keen, u)",
+    "state": "NO_VALID_RULE",
+    "value": "unknown"
+   },
+   {
+    "goal": "class(wettle)",
+    "state": "KNOWN",
+    "value": "seep"
+   }
+  ]
+ },
+ {
+  "id": "N-H34",
+  "category": "NO_VALID_RULE",
+  "mirror_of": "H34",
+  "english": "A orrin block at 4.5 Gdg is in line of hears of a mote but does not touch it. Is the mote cracked? Which way does saph flow between them? What color does the orrin keen?",
+  "input": "let q = orrin tarn 4.5 Kvx\nlet k = mote\nrel hears q k\nask cracked k\nask passes q k\nask keen q",
+  "expect": [
+   {
+    "goal": "cracked(k)",
+    "state": "NO_VALID_RULE",
+    "value": "unknown"
+   },
+   {
+    "goal": "passes(q, k)",
+    "state": "DERIVED",
+    "value": "q → k"
+   },
+   {
+    "goal": "keen(q)",
+    "state": "DERIVED",
+    "value": "bass"
+   }
+  ],
+  "laws": [
+   "N5",
+   "N4",
+   "N2"
+  ]
+ },
+ {
+  "id": "N-H35",
+  "category": "NO_VALID_RULE",
+  "mirror_of": "H35",
+  "english": "A veskite block is seen glimming treble. A telkane block is in its line of hears (not touching). What is the veskite's tarn? What color is the veskite? Which way does saph flow between the veskite and the telkane?",
+  "input": "let d = veskite keen treble\nlet m = telkane\nrel hears d m\nask tarn d\nask keen d\nask passes d m",
+  "expect": [
+   {
+    "goal": "tarn(d)",
+    "state": "NO_VALID_RULE",
+    "value": "unknown"
+   },
+   {
+    "goal": "keen(d)",
+    "state": "KNOWN",
+    "value": "treble"
+   },
+   {
+    "goal": "passes(d, m)",
+    "state": "DERIVED",
+    "value": "d → m"
+   }
+  ],
+  "laws": [
+   "N4"
+  ]
+ },
+ {
+  "id": "N-H36",
+  "category": "OUT_OF_BOUNDARY",
+  "mirror_of": "H36",
+  "english": "A orrin block at 4.505 Gdg abuts a telkane block at 2500 vx over a 4 rod path. What is the passage rate? Which way does saph flow? What color does the orrin keen?",
+  "input": "let q = orrin tarn 4.505 Kvx\nlet m = telkane tarn 2500 vx\nrel abuts q m reach 8 rd\nask rate q m\nask passes q m\nask keen q",
+  "expect": [
+   {
+    "goal": "rate(q, m)",
+    "state": "OUT_OF_BOUNDARY",
+    "value": "unknown"
+   },
+   {
+    "goal": "passes(q, m)",
+    "state": "DERIVED",
+    "value": "q → m"
+   },
+   {
+    "goal": "keen(q)",
+    "state": "DERIVED",
+    "value": "bass"
+   }
+  ],
+  "laws": [
+   "N1",
+   "N2"
+  ]
+ },
+ {
+  "id": "N-H37",
+  "category": "OUT_OF_BOUNDARY",
+  "mirror_of": "H37",
+  "english": "A telkane block at 4500 vx abuts a orrin block at 2250 vx over a 3 rod path. The orrin also abuts a shalk block at 2200 vx, with a recorded link reach of 0 rod. What is the rate between the telkane and the orrin? What is the rate between the orrin and the shalk? Which way does saph flow between the orrin and the shalk?",
+  "input": "let m = telkane tarn 4500 vx\nlet q = orrin tarn 2250 vx\nlet b = shalk tarn 2200 vx\nrel abuts m q reach 6 rd\nrel abuts q b reach 0 rd\nask rate m q\nask rate q b\nask passes q b",
+  "expect": [
+   {
+    "goal": "rate(m, q)",
+    "state": "OUT_OF_BOUNDARY",
+    "value": "unknown"
+   },
+   {
+    "goal": "rate(q, b)",
+    "state": "OUT_OF_BOUNDARY",
+    "value": "unknown"
+   },
+   {
+    "goal": "passes(q, b)",
+    "state": "DERIVED",
+    "value": "q → b"
+   }
+  ],
+  "laws": [
+   "N1"
+  ]
+ },
+ {
+  "id": "N-H38",
+  "category": "CONFABULATED",
+  "mirror_of": "H38",
+  "english": "A veskite block is at 3750 vx. What color does it keen? Does it keen at all?",
+  "input": "let d = veskite tarn 3750 vx\nask keen d\nask has keen d",
+  "expect": [
+   {
+    "goal": "keen(d)",
+    "state": "CONFABULATED",
+    "value": "possibly tenor"
+   },
+   {
+    "goal": "has(keen, d)",
+    "state": "CONFABULATED",
+    "value": "possibly yes"
+   }
+  ],
+  "laws": [
+   "N2"
+  ]
+ },
+ {
+  "id": "N-H39",
+  "category": "CONFABULATED",
+  "mirror_of": "H39",
+  "english": "Suppose 'pockle' is a new kind of resonant mass. A pockle block is at 2.495 Gdg. Does it keen? What color? What class is pockle?",
+  "input": "teach pockle isa resonant\nlet z = pockle tarn 2.495 Kvx\nask has keen z\nask keen z\nask class pockle",
+  "expect": [
+   {
+    "goal": "has(keen, z)",
+    "state": "CONFABULATED",
+    "value": "possibly no"
+   },
+   {
+    "goal": "keen(z)",
+    "state": "CONFABULATED",
+    "value": "possibly silent"
+   },
+   {
+    "goal": "class(pockle)",
+    "state": "KNOWN",
+    "value": "resonant"
+   }
+  ],
+  "laws": [
+   "N2"
+  ]
+ },
+ {
+  "id": "N-H40",
+  "category": "CONFABULATED",
+  "mirror_of": "H40",
+  "english": "A veskite block at 1500 vx abuts a telkane block at 500 vx over a 2 rod path. What is your best guess for veskite's linkance? What is your best guess for the passage rate between them? Which way does saph flow?",
+  "input": "let d = veskite tarn 1500 vx\nlet m = telkane tarn 500 vx\nrel abuts d m reach 4 rd\nestimate value veskite linkance\nestimate rate d m\nask passes d m",
+  "expect": [
+   {
+    "goal": "value(veskite, linkance)",
+    "state": "CONFABULATED",
+    "value": "possibly 1.5 S·rd/(vx·beat)"
+   },
+   {
+    "goal": "rate(d, m)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   },
+   {
+    "goal": "passes(d, m)",
+    "state": "DERIVED",
+    "value": "d → m"
+   }
+  ],
+  "laws": [
+   "N1"
+  ]
+ }
+]

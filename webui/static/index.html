@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CodeMonkey</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2315130f'/%3E%3Cpath d='M11 11l-5 5 5 5M21 11l5 5-5 5' fill='none' stroke='%23d26a43' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<script>
+/* Apply the saved theme before anything is drawn, so the page never flashes the default. */
+try {
+  var saved = JSON.parse(localStorage.getItem("cm:theme-vars") || "null");
+  if (saved) for (var k in saved) document.documentElement.style.setProperty(k, saved[k]);
+  var fonts = JSON.parse(localStorage.getItem("cm:font-vars") || "null");
+  if (fonts) for (var f in fonts) if (fonts[f]) document.documentElement.style.setProperty(f, fonts[f]);
+} catch (e) {}
+</script>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<div class="blobs" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+
+<div class="app">
+  <!-- left: sessions, grouped by folder -->
+  <aside class="rail" id="sessions-drawer" aria-label="Sessions">
+    <div class="rhd"><span class="brand">Code<i>Monkey</i></span><button class="iconbtn" id="search-btn" title="Search everything (Ctrl K)" aria-label="Search everything"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg></button></div>
+    <div class="rbody">
+      <button class="it add" id="new-session" title="New session (Alt N)"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>New session</span></button>
+      <button class="it add" id="scheduled-btn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span>Scheduled</span></button>
+      <button class="it add" id="customize-btn" title="Skills, commands, agents, plugins and MCP servers"><svg viewBox="0 0 24 24"><rect x="3.5" y="7" width="17" height="12" rx="2"/><path d="M9 7V5.5A1.5 1.5 0 0110.5 4h3A1.5 1.5 0 0115 5.5V7M3.5 12.5h17"/></svg><span>Customize</span></button>
+      <div id="session-list" role="list"></div>
+    </div>
+    <div class="rfoot">
+      <button class="it" id="kernel-btn" title="An experiment: ask the MSHMOE kernel questions; every answer says how it knows"><svg viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.500M12 12v9M12 12L4 7.500"/></svg><span>Logic lab</span></button>
+      <button class="iconbtn" id="settings-btn" title="Settings (Ctrl ,)" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></button>
+    </div>
+  </aside>
+  <div class="veil" id="veil"></div>
+
+  <!-- centre: the conversation -->
+  <section class="main">
+    <header class="top">
+      <button class="iconbtn" id="nav-btn" title="Sessions" aria-label="Sessions"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+      <span class="proj" id="session-title"></span><span class="anchor" id="session-anchor"><button class="iconbtn caret hidden" id="session-menu-btn" data-menu="session-menu" title="Session menu" aria-label="Session menu"><svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></svg></button><div class="menu" id="session-menu" role="menu"></div></span>
+      <span class="sp"></span>
+      <button class="face hidden" id="face" type="button" data-state="idle" aria-label="The agent is idle" title="The agent is idle">
+        <svg viewBox="0 0 40 40" aria-hidden="true">
+          <rect class="head" x="4" y="6" width="32" height="28" rx="10"/>
+          <ellipse class="eye l" cx="15" cy="18" rx="2.4" ry="3"/>
+          <ellipse class="eye r" cx="25" cy="18" rx="2.4" ry="3"/>
+          <path class="mouth" d="M14 26 Q20 29 26 26"/>
+        </svg>
+      </button>
+      <span class="conn hidden" id="conn" role="status"><i class="st live"></i>Reconnecting</span>
+      <button class="ghost hidden" id="changes-btn" title="What the last turn changed (Ctrl Shift D)"><span class="num-add" id="changes-add"></span><span class="num-del" id="changes-del"></span>Changes</button>
+      <span class="anchor right" id="pane-anchor"><button class="iconbtn panes" id="activity-btn" data-menu="pane-menu" title="Panes" aria-label="Panes"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M15 4v16"/></svg><svg viewBox="0 0 24 24" class="chev"><path d="M8 10l4 4 4-4"/></svg></button><div class="menu" id="pane-menu" role="menu"></div></span>
+    </header>
+
+    <div class="scroll" id="chat-wrap">
+      <div class="hello" id="hello">
+        <div class="home"><h1 id="home-hi">Welcome back</h1><div id="home-list"></div></div>
+      </div>
+      <div class="col hidden" id="chat" aria-live="polite"></div>
+    </div>
+    <div class="dock">
+      <button class="tobottom hidden" id="new-msg-pill" title="Scroll to the latest" aria-label="Scroll to the latest"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span>New</span></button>
+      <div class="livebar hidden" id="livebar"><i class="st live"></i><span id="live-text">Working</span><em id="live-time"></em></div>
+      <div class="queue hidden" id="queue-bar"></div>
+      <div class="taskpin hidden" id="taskpin"></div>
+      <!-- where the work happens, as Claude Code shows it above the input of a new session -->
+      <div class="envbar" id="envbar">
+        <span class="anchor">
+          <button class="pick folder" id="folder-btn" data-menu="folder-menu" title="The folder the agent works in"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 012-2h4l2 2.500h8a2 2 0 012 2V17a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg><span class="lbl" id="folder-label">Folder</span><svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></svg></button>
+          <div class="menu up" id="folder-menu" role="menu"></div>
+        </span>
+        <span class="pick static hidden" title="Git branch"><svg viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 7v10M18 10c0 4-6 3-6 7"/></svg><span class="lbl" id="env-branch"></span></span>
+        <button class="pick wt" id="env-worktree" type="button" aria-pressed="false" title="Work in a copy of the repository on a branch of its own, so other sessions' changes never mix with this one's"><i class="box"></i><span class="lbl">Worktree</span></button>
+      </div>
+      <div class="gitbar hidden" id="gitbar" aria-label="Branch"></div>
+      <div class="composer" id="composer">
+        <div class="menu pop" id="palette" role="listbox"></div>
+        <div class="chipsrow hidden" id="attach-preview"></div>
+        <textarea rows="1" id="input" placeholder="Ask CodeMonkey to build or fix something   ·   / for commands" aria-label="Message"></textarea>
+        <button class="send stop hidden" id="cancel-btn" title="Stop (Esc)" aria-label="Stop"><svg viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2"/></svg></button>
+        <button class="send" id="send-btn" title="Send (Enter)" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M19 6v5a3 3 0 01-3 3H6M10 10l-4 4 4 4"/></svg></button>
+        <div class="bar">
+          <button class="iconbtn" id="attach-btn" title="Attach files" aria-label="Attach files"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+          <input type="file" id="file-picker" multiple class="hidden">
+          <span class="anchor perm">
+            <button class="pick" id="perm-btn" data-menu="perm-menu" title="Mode (Shift Tab to switch, Ctrl Shift M for the menu)"><span class="lbl" id="perm-label"></span></button>
+            <div class="menu up" id="perm-menu" role="menu"></div>
+          </span>
+          <span class="sp"></span>
+          <span class="anchor model">
+            <button class="pick" id="model-btn" data-menu="model-menu" title="Model and effort (Ctrl Shift I)"><span class="lbl" id="model-label"></span></button>
+            <div class="menu up" id="model-menu" role="menu"></div>
+          </span>
+          <span class="anchor right">
+            <button class="ctx" id="ctx-meter" data-menu="ctx-menu" title="Context used" aria-label="Context used"></button>
+            <div class="menu up wide" id="ctx-menu"></div>
+          </span>
+        </div>
+      </div>
+      <div class="statusline hidden" id="statusline" aria-label="Status"></div>
+    </div>
+  </section>
+
+  <!-- a second session beside this one (split view) -->
+  <section class="split hidden" id="split" aria-label="Second session">
+    <div class="splithd"><span class="rtitle">Split view</span><span class="rhdacts"><button class="iconbtn" id="split-pop" title="Open in its own window" aria-label="Open in its own window"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/></svg></button><button class="iconbtn" id="split-close" title="Close split view" aria-label="Close split view"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span></div>
+    <iframe id="split-frame" title="Second session"></iframe>
+  </section>
+
+  <!-- right: what a turn changed, to keep or undo file by file -->
+  <aside class="rail right review hidden" id="review" aria-label="Changes">
+    <div class="rhd"><span class="rtitle">Changes</span><span class="brtabs difftabs" role="tablist" aria-label="Diff layout"><button id="diff-unified" role="tab" aria-selected="true" title="One column: removed and added lines in place (you can comment on lines)">Unified</button><button id="diff-split" role="tab" aria-selected="false" title="Before and after, side by side">Split</button></span><button class="iconbtn popbtn" data-pop-pane title="Open in its own window" aria-label="Open in its own window"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/></svg></button><button class="iconbtn" id="review-close" title="Hide" aria-label="Hide Changes"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="rbody" id="review-files"></div>
+    <div class="cmtbar hidden" id="review-comments"><span id="review-comments-n"></span><button class="btn primary" id="review-comments-send" title="Send every comment to the agent (Ctrl Enter)">Send <kbd>Ctrl Enter</kbd></button></div>
+    <div class="rfoot" id="review-foot"><button class="btn" id="review-undo-all">Undo all</button><button class="btn primary" id="review-keep-all">Keep all</button></div>
+  </aside>
+
+  <!-- right: a side question that reads this session but adds nothing to it (Ctrl ;, /btw) -->
+  <aside class="rail right hidden" id="side" aria-label="Side chat">
+    <div class="rhd"><span class="rtitle">Side chat</span><span class="rhdacts"><button class="iconbtn" id="side-clear" title="Start the side chat over" aria-label="Start over"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.5-5.8M4 4v4h4"/></svg></button><button class="iconbtn" id="side-close" title="Close (Ctrl ;)" aria-label="Close side chat"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span></div>
+    <div class="rbody" id="side-log"></div>
+    <div class="sidein"><textarea id="side-input" rows="1" placeholder="Ask a side question" aria-label="Side question"></textarea></div>
+  </aside>
+
+  <!-- right: background work in this session (helpers, background commands) -->
+  <aside class="rail right hidden" id="tasks-pane" aria-label="Tasks">
+    <div class="rhd"><span class="rtitle">Tasks</span><button class="iconbtn popbtn" data-pop-pane title="Open in its own window" aria-label="Open in its own window"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/></svg></button><button class="iconbtn" data-close-pane title="Close (Ctrl \)" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="rbody" id="tasks-body"></div>
+  </aside>
+
+  <!-- right: the latest plan, and its to-do list -->
+  <aside class="rail right hidden" id="plan-pane" aria-label="Plan">
+    <div class="rhd"><span class="rtitle">Plan</span><button class="iconbtn popbtn" data-pop-pane title="Open in its own window" aria-label="Open in its own window"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/></svg></button><button class="iconbtn" data-close-pane title="Close (Ctrl \)" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="rbody" id="plan-body"></div>
+  </aside>
+
+  <!-- right: a file from the session's folder, to read or edit -->
+  <aside class="rail right hidden" id="file-pane" aria-label="File">
+    <div class="rhd"><span class="rtitle filet"><button class="iconbtn" id="file-back" title="All files" aria-label="All files"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><span id="file-title"></span><i class="hidden" id="file-dot" title="Unsaved changes"></i></span><span class="rhdacts"><button class="btn primary hidden" id="file-save" title="Save (Ctrl S)">Save</button><button class="iconbtn" data-close-pane title="Close (Ctrl \)" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span></div>
+    <div class="ftreebox"><input class="field" id="file-filter" placeholder="Filter files" spellcheck="false" autocomplete="off" aria-label="Filter files"><div id="file-tree" role="tree" aria-label="Project files"></div></div>
+    <textarea id="file-text" spellcheck="false" aria-label="File contents"></textarea>
+    <div class="panefoot" id="file-note"></div>
+  </aside>
+
+  <!-- right: the app you are building, running (Claude Code's preview browser) -->
+  <aside class="rail right hidden" id="browser-pane" aria-label="Browser">
+    <div class="rhd brhd">
+      <span class="brtabs" role="tablist"><button id="br-tab-you" role="tab" aria-selected="true" title="Your app, live">You</button><button id="br-tab-agent" role="tab" aria-selected="false" title="What the agent's browser shows" disabled>Agent</button></span>
+      <button class="iconbtn" id="br-back" title="Back" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <button class="iconbtn" id="br-fwd" title="Forward" aria-label="Forward"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+      <button class="iconbtn" id="br-reload" title="Reload" aria-label="Reload"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.5-5.8M20 4v4h-4"/></svg></button>
+      <input id="br-url" spellcheck="false" autocomplete="off" aria-label="Address" placeholder="localhost:3000">
+      <button class="iconbtn" id="br-ext" title="Open in your browser" aria-label="Open in your browser"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/></svg></button>
+      <button class="iconbtn" data-close-pane title="Close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <iframe id="br-frame" title="Preview" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"></iframe>
+    <div class="brshot hidden" id="br-agent"><img id="br-shot" alt="What the agent's browser shows"><div class="panefoot" id="br-agent-note">A picture of the agent's browser after each step it takes.</div></div>
+    <div class="panehint brempty hidden" id="br-empty">Start your app (in the Terminal, or ask the agent), then type its address above. CodeMonkey picks up addresses like <code>localhost:5173</code> from what your commands print.</div>
+  </aside>
+
+  <!-- right: a terminal in the session's folder (this computer only) -->
+  <aside class="rail right hidden" id="term-pane" aria-label="Terminal">
+    <div class="rhd"><span class="rtitle">Terminal</span><button class="iconbtn popbtn" data-pop-pane title="Open in its own window" aria-label="Open in its own window"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/></svg></button><em class="termcwd" id="term-cwd"></em><span class="rhdacts"><button class="btn hidden" id="term-stop" title="Stop the running command">Stop</button><button class="iconbtn" data-close-pane title="Close (Ctrl `)" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span></div>
+    <div class="termout" id="term-out"></div>
+    <div class="termin"><span>&#8250;</span><input id="term-input" spellcheck="false" autocomplete="off" aria-label="Command" placeholder="Type a command, Enter runs it"></div>
+  </aside>
+
+  <!-- right: one helper's run, live (Claude Code's subagent pane) -->
+  <aside class="rail right hidden" id="helper-pane" aria-label="Helper">
+    <div class="rhd"><span class="rtitle" id="helper-title">Helper</span><button class="iconbtn" data-close-pane title="Close (Ctrl \)" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="rbody" id="helper-body"></div>
+  </aside>
+
+  <!-- right: what the agent is doing -->
+  <aside class="rail right hidden" id="inspector" aria-label="Activity">
+    <div class="rhd"><span class="rtitle">Activity</span><button class="iconbtn" id="inspector-close" title="Hide" aria-label="Hide Activity"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="rbody">
+      <!-- Claude Code's session details: where it runs, what it changed, how full the context is -->
+      <section class="dcards">
+        <div class="dcard"><div class="dchd static"><span>Environment</span><em id="dcard-env"></em></div></div>
+        <div class="dcard"><button class="dchd" id="dcard-chg" type="button" title="Open the diff (Ctrl Shift D)"><span>Changes</span><em id="dcard-chg-n">None yet</em></button></div>
+        <div class="dcard"><button class="dchd" id="dcard-ctx" type="button" aria-expanded="false"><span>Context</span><em id="dcard-ctx-pct"></em><svg viewBox="0 0 24 24" class="chev"><path d="M9 6l6 6-6 6"/></svg></button><div class="dcbody hidden" id="dcard-ctx-body"></div></div>
+      </section>
+      <section>
+        <div class="rh"><span>Checkpoints</span></div>
+        <div id="checkpoints"></div>
+        <button class="it add" id="checkpoint-btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>New checkpoint</span><em>Ctrl S</em></button>
+      </section>
+    </div>
+  </aside>
+</div>
+
+<!-- right-click menu for a session row -->
+<div class="menu float" id="row-menu" role="menu"></div>
+
+<!-- the agent asks before it acts -->
+<div class="scrim" id="perm-modal" role="dialog" aria-modal="true" aria-labelledby="perm-title">
+  <div class="ask">
+    <div class="askhd"><i class="permicon"><svg viewBox="0 0 24 24"><path d="M4 17l6-5-6-5M12 19h8"/></svg></i><span id="perm-title">Allow this?</span></div>
+    <pre class="askcmd" id="perm-cmd"></pre>
+    <div id="perm-diff"></div>
+    <div class="askwhy" id="perm-why"></div>
+    <div class="guardbox riskbox hidden" id="perm-risky"><svg viewBox="0 0 24 24"><path d="M12 8v5M12 16.500v.500"/><path d="M12 3l9 16H3z"/></svg><span id="perm-risky-text"></span></div>
+    <div class="guardbox hidden" id="perm-guard"><svg viewBox="0 0 24 24"><path d="M12 8v5M12 16.500v.500"/><path d="M12 3l9 16H3z"/></svg><span id="perm-guard-text"></span></div>
+    <div class="askopts">
+      <button class="opt primary" id="perm-allow"><span><b>Allow once</b><i>Do it this time</i></span><kbd>Enter</kbd></button>
+      <button class="opt" id="perm-always"><span><b id="perm-always-label">Always allow</b><i id="perm-always-sub">Stop asking for this</i></span><kbd>A</kbd></button>
+      <button class="opt" id="perm-deny"><span><b>Deny</b><i>Skip it and let the agent continue</i></span><kbd>Esc</kbd></button>
+    </div>
+    <input class="field" id="perm-message" placeholder="Or tell the agent what to do instead, then press Enter" aria-label="Tell the agent what to do instead">
+  </div>
+</div>
+
+<!-- Set up a model: for someone who has never run one -->
+<div class="scrim" id="setup-modal" role="dialog" aria-modal="true" aria-labelledby="setup-title">
+  <div class="ask wide setupdlg">
+    <div class="askhd"><span id="setup-title">Set up a model</span></div>
+    <div id="setup-body"></div>
+    <div class="askfoot"><div class="btnrow"><button class="btn" id="setup-close">Close</button></div></div>
+  </div>
+</div>
+
+<!-- Report a problem: one zip to send -->
+<div class="scrim" id="report-modal" role="dialog" aria-modal="true" aria-labelledby="report-title">
+  <div class="ask">
+    <div class="askhd"><span id="report-title">Report a problem</span></div>
+    <div id="report-body"></div>
+    <div class="askfoot"><div class="btnrow"><button class="btn" id="report-cancel">Close</button><button class="btn primary" id="report-save">Save report</button></div></div>
+  </div>
+</div>
+
+<!-- ?: every keyboard shortcut -->
+<div class="scrim" id="keys-modal" role="dialog" aria-modal="true" aria-labelledby="keys-title">
+  <div class="ask wide">
+    <div class="askhd"><span id="keys-title">Keyboard shortcuts</span></div>
+    <div id="keys-list"></div>
+    <div class="askfoot"><div class="btnrow"><button class="btn" id="keys-tour">Show me around</button><button class="btn" id="keys-close">Close</button></div></div>
+  </div>
+</div>
+
+<!-- a helper's whole run -->
+<!-- "#": where to keep a note -->
+<div class="scrim" id="remember-modal" role="dialog" aria-modal="true" aria-labelledby="remember-title">
+  <div class="ask">
+    <div class="askhd"><span id="remember-title">Remember</span></div>
+    <p class="sub" id="remember-text"></p>
+    <div class="askopts">
+      <button class="opt primary" data-scope="project"><span><b>Project memory</b><i id="remember-project-sub">AGENTS.md in this folder</i></span></button>
+      <button class="opt" data-scope="user"><span><b>Your memory</b><i>About you, used in every project</i></span></button>
+    </div>
+    <div class="askfoot"><div class="btnrow"><button class="btn" id="remember-cancel">Cancel</button></div></div>
+  </div>
+</div>
+
+<!-- /memory: the memory files, to edit -->
+<div class="scrim" id="memory-modal" role="dialog" aria-modal="true" aria-labelledby="memory-title">
+  <div class="ask wide">
+    <div class="askhd"><span id="memory-title">Memory</span></div>
+    <div id="memory-tabs"></div>
+    <p class="sub fine" id="memory-path"></p>
+    <textarea class="field mono" id="memory-text" rows="16" spellcheck="false"></textarea>
+    <div class="askfoot"><div class="btnrow"><button class="btn" id="memory-cancel">Close</button><button class="btn primary" id="memory-save">Save</button></div></div>
+  </div>
+</div>
+
+<!-- rewind: go back to before one of your messages -->
+<div class="scrim" id="rewind-modal" role="dialog" aria-modal="true" aria-labelledby="rewind-title">
+  <div class="ask wide">
+    <div class="askhd"><span id="rewind-title">Rewind</span></div>
+    <p class="sub" id="rewind-sub">Go back to before one of your messages.</p>
+    <div class="rwlist" id="rewind-list"></div>
+    <div class="askopts hidden" id="rewind-opts">
+      <button class="opt primary" data-restore="both"><span><b>Restore code and conversation</b><i id="rw-both-sub"></i></span></button>
+      <button class="opt" data-restore="chat"><span><b>Restore conversation</b><i>Keep the code as it is now</i></span></button>
+      <button class="opt" data-restore="code"><span><b>Restore code</b><i>Keep the conversation</i></span></button>
+      <button class="opt" data-restore="fork"><span><b>Fork from here</b><i>A new session with the conversation up to this message; this one stays</i></span></button>
+    </div>
+    <div class="askfoot"><div class="btnrow"><button class="btn" id="rewind-cancel">Never mind</button></div></div>
+  </div>
+</div>
+
+<!-- an MCP server asks you for a few answers (elicitation) -->
+<div class="scrim" id="elicit-modal" role="dialog" aria-modal="true" aria-labelledby="elicit-title">
+  <div class="ask wide">
+    <div class="askhd"><span id="elicit-title">A server is asking</span></div>
+    <div class="askwhy" id="elicit-message"></div>
+    <div id="elicit-fields"></div>
+    <div class="askwhy fine" id="elicit-error"></div>
+    <div class="askfoot"><div class="btnrow"><button class="btn" id="elicit-decline">Decline</button><button class="btn primary" id="elicit-send">Send</button></div></div>
+  </div>
+</div>
+
+<!-- yes / no -->
+<div class="scrim" id="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+  <div class="ask">
+    <div class="askhd"><span id="confirm-title"></span></div>
+    <div class="askwhy" id="confirm-text"></div>
+    <div class="askfoot"><div class="btnrow"><button class="btn" id="confirm-cancel">Cancel</button><button class="btn primary" id="confirm-ok">OK</button></div></div>
+  </div>
+</div>
+
+<!-- one line of text (rename, remember) -->
+<div class="scrim" id="prompt-modal" role="dialog" aria-modal="true" aria-labelledby="prompt-title">
+  <div class="ask">
+    <div class="askhd"><span id="prompt-title"></span></div>
+    <input class="field" id="prompt-input" aria-labelledby="prompt-title">
+    <div class="askfoot"><div class="btnrow"><button class="btn" id="prompt-cancel">Cancel</button><button class="btn primary" id="prompt-ok">Save</button></div></div>
+  </div>
+</div>
+
+<!-- a slash command -->
+<div class="scrim" id="cmd-modal" role="dialog" aria-modal="true" aria-labelledby="cmd-title">
+  <div class="ask wide">
+    <div class="askhd"><span id="cmd-title">Command</span></div>
+    <label class="lab" for="cmd-name">Name (what you type after the slash)</label>
+    <input class="field mono" id="cmd-name" placeholder="review">
+    <label class="lab" for="cmd-desc">What it does</label>
+    <input class="field" id="cmd-desc" placeholder="Review the changes made so far">
+    <label class="lab" for="cmd-body">Instruction sent to the agent. <code>$ARGUMENTS</code> is replaced by what you type after the command.</label>
+    <textarea class="field mono" id="cmd-body" rows="8"></textarea>
+    <div class="askfoot"><div class="btnrow"><button class="btn" id="cmd-cancel">Cancel</button><button class="btn primary" id="cmd-save">Save</button></div></div>
+  </div>
+</div>
+
+<!-- a longer piece of text (persona, about you) -->
+<div class="scrim" id="git-modal" role="dialog" aria-modal="true" aria-labelledby="git-title">
+  <div class="ask wide">
+    <div class="askhd"><span id="git-title">Commit</span></div>
+    <p class="sub" id="git-hint"></p>
+    <label class="gitf hidden" id="git-branch-row"><span>New branch</span><input class="field" id="git-branch" spellcheck="false" placeholder="codemonkey/what-it-does"></label>
+    <label class="gitf"><span>Summary</span><input class="field" id="git-subject"></label>
+    <label class="gitf"><span id="git-body-label">Details (optional)</span><textarea class="field" id="git-body" rows="7"></textarea></label>
+    <label class="gitcheck hidden" id="git-draft-row"><input type="checkbox" id="git-draft"> Open as a draft</label>
+    <div class="askfoot"><div class="btnrow"><button class="btn" id="git-cancel">Cancel</button><button class="btn primary" id="git-go">Commit</button></div></div>
+  </div>
+</div>
+
+<div class="scrim" id="text-modal" role="dialog" aria-modal="true" aria-labelledby="text-title">
+  <div class="ask wide">
+    <div class="askhd"><span id="text-title"></span></div>
+    <p class="sub" id="text-hint"></p>
+    <textarea class="field" id="text-body" rows="10" aria-labelledby="text-title"></textarea>
+    <div class="askfoot"><div class="btnrow"><button class="btn" id="text-cancel">Cancel</button><button class="btn primary" id="text-save">Save</button></div></div>
+  </div>
+</div>
+
+<!-- remote control: use the app from a phone (also in Settings, General) -->
+<div class="scrim" id="remote-modal" role="dialog" aria-modal="true" aria-labelledby="remote-head">
+  <div class="ask wide remote">
+    <button class="dclose" id="remote-close" title="Close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <div class="askhd"><svg viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/></svg><span id="remote-head">Remote control</span></div>
+    <p class="sub">Carry on from your phone while the work happens on this computer.</p>
+    <div id="remote-body"></div>
+  </div>
+</div>
+
+<!-- make or change a theme -->
+<div class="scrim" id="theme-modal" role="dialog" aria-modal="true" aria-labelledby="theme-head">
+  <div class="ask wide">
+    <div class="askhd"><span id="theme-head">Your theme</span></div>
+    <p class="sub">Pick four colours; everything else is worked out from them. The page changes as you choose.</p>
+    <label class="lab" for="theme-name">Name</label>
+    <input class="field" id="theme-name" placeholder="My theme" maxlength="30">
+    <label class="lab">Colours</label>
+    <div class="swatches">
+      <label class="swatch">Background<input type="color" id="theme-bg"></label>
+      <label class="swatch">Panels<input type="color" id="theme-panel"></label>
+      <label class="swatch">Text<input type="color" id="theme-text"></label>
+      <label class="swatch">Accent<input type="color" id="theme-accent"></label>
+    </div>
+    <div class="askfoot"><div class="btnrow"><button class="btn danger hidden" id="theme-delete">Delete</button><button class="btn" id="theme-cancel">Cancel</button><button class="btn primary" id="theme-save">Save</button></div></div>
+  </div>
+</div>
+
+<!-- a skill -->
+<div class="scrim" id="skill-modal" role="dialog" aria-modal="true" aria-labelledby="skill-head">
+  <div class="ask wide">
+    <div class="askhd"><span id="skill-head">Skill</span></div>
+    <label class="lab" for="skill-name">Name</label>
+    <input class="field mono" id="skill-name" placeholder="release-checklist">
+    <label class="lab" for="skill-desc">When the agent should use it (this is what it reads to decide)</label>
+    <input class="field" id="skill-desc" placeholder="Use when preparing a release">
+    <label class="lab" for="skill-keys">Words that should bring it up, separated by commas</label>
+    <input class="field" id="skill-keys" placeholder="release, changelog, version">
+    <label class="lab" for="skill-body">The playbook: what to do, step by step</label>
+    <textarea class="field mono" id="skill-body" rows="10"></textarea>
+    <div class="askfoot"><div class="btnrow"><button class="btn" id="skill-cancel">Cancel</button><button class="btn primary" id="skill-save">Save</button></div></div>
+  </div>
+</div>
+
+<!-- a scheduled job -->
+<div class="scrim" id="job-modal" role="dialog" aria-modal="true" aria-labelledby="job-title-head">
+  <div class="ask wide">
+    <div class="askhd"><span id="job-title-head">Scheduled job</span></div>
+    <label class="lab" for="job-title">Name</label>
+    <input class="field" id="job-title" placeholder="Morning test check">
+    <label class="lab" for="job-task">What it should do. It works alone and can only look, not change anything.</label>
+    <textarea class="field" id="job-task" rows="5" placeholder="Run the tests and tell me if any fail."></textarea>
+    <label class="lab" for="job-when">When</label>
+    <div class="crumb"><select class="sel" id="job-when"></select><input class="field mono" id="job-cron" placeholder="0 9 * * *" aria-label="Schedule as five cron fields"></div>
+    <label class="lab" for="job-watch">Only wake the agent when this command's output changes (optional; it must be a command you always allow)</label>
+    <input class="field mono" id="job-watch" placeholder="git status --short">
+    <label class="lab" id="job-folder"></label>
+    <div class="askfoot"><div class="btnrow"><button class="btn danger hidden" id="job-remove">Remove</button><button class="btn" id="job-cancel">Cancel</button><button class="btn primary" id="job-save">Save</button></div></div>
+  </div>
+</div>
+
+<!-- choose a folder on this computer -->
+<div class="scrim" id="folder-modal" role="dialog" aria-modal="true" aria-labelledby="browse-title">
+  <div class="ask wide browsedlg">
+    <div class="askhd"><span id="browse-title">Choose the folder to work in</span></div>
+    <p class="sub">The agent reads and changes files only inside this folder. Open a folder to look inside it, or press Choose beside it.</p>
+    <div class="bgrid">
+      <nav class="bplaces" id="browse-roots" aria-label="Places"></nav>
+      <div class="bmain">
+        <div class="crumb">
+          <button class="iconbtn" id="browse-up" title="Up one folder" aria-label="Up one folder"><svg viewBox="0 0 24 24"><path d="M12 19V6M6.500 11.500L12 6l5.500 5.500"/></svg></button>
+          <div class="bcrumbs" id="browse-crumbs"></div>
+          <input class="field mono hidden" id="browse-path" spellcheck="false" aria-label="Folder path">
+        </div>
+        <div class="btools"><input class="field" id="browse-filter" placeholder="Filter folders" spellcheck="false" autocomplete="off" aria-label="Filter folders"><button class="btn" id="browse-new" type="button">New folder</button></div>
+        <div class="blistdir" id="browse-list"></div>
+      </div>
+    </div>
+    <div class="askfoot"><button class="btn link hidden" id="browse-native" type="button">Use the Windows folder picker</button><span class="bnote" id="browse-note"></span><div class="btnrow"><button class="btn" id="browse-cancel">Cancel</button><button class="btn primary" id="browse-choose">Work here</button></div></div>
+  </div>
+</div>
+
+<!-- search everything -->
+<div class="scrim top" id="cmdk-modal" role="dialog" aria-modal="true" aria-label="Search everything">
+  <div class="palette">
+    <label class="pin"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.500"/><path d="M20 20l-4-4"/></svg><input id="cmdk-input" placeholder="Search sessions, commands, files" autocomplete="off" spellcheck="false"></label>
+    <div class="plist" id="cmdk-list" role="listbox"></div>
+  </div>
+</div>
+
+<!-- settings: one dialog, sections on the left -->
+<div class="scrim" id="settings-modal" role="dialog" aria-modal="true" aria-label="Settings">
+  <div class="dialog">
+    <nav class="dnav" id="settings-nav">
+      <button class="dback" id="settings-back" type="button"><svg viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>Settings</button>
+      <label class="dsearch"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.500"/><path d="M20 20l-4-4"/></svg><input id="settings-search" placeholder="Search settings"></label>
+      <button class="dn" data-page="general"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.600 5.600l2.100 2.100M16.300 16.300l2.100 2.100M5.600 18.400l2.100-2.100M16.300 7.700l2.100-2.100"/></svg>General</button>
+      <button class="dn" data-page="models"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="12" rx="2"/><path d="M9 21h6M12 17v4"/></svg>Models</button>
+      <button class="dn" data-page="permissions"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.500-3 8.500-7 10-4-1.500-7-5.500-7-10V6l7-3z"/></svg>Permissions</button>
+      <button class="dn" data-page="whatsnew"><svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>What's new</button>
+      <button class="dn" data-page="usage"><svg viewBox="0 0 24 24"><path d="M5 19V9M12 19V5M19 19v-7"/></svg>Usage</button>
+      <button class="dmorebtn" id="settings-more-btn" aria-expanded="false">More settings</button>
+      <div class="dmore" id="settings-more">
+      <div class="dgroup">Your work</div>
+      <button class="dn" data-page="context"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg>Context</button>
+      <button class="dn" data-page="people"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.500"/><path d="M2.500 20c.500-4 3-6 6.500-6s6 2 6.500 6M16 5.500a3 3 0 010 5.500M18 14.500c2 .800 3.200 2.600 3.500 5.500"/></svg>People</button>
+      <button class="dn" data-page="library"><svg viewBox="0 0 24 24"><path d="M4 5h5v14H4zM9 5h5v14H9z"/><path d="M15.500 7l3.500-1 3 12-3.500 1z"/></svg>Library</button>
+      <button class="dn" data-page="ideas"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 00-4 10.500V15h8v-1.500A6 6 0 0012 3z"/></svg>Ideas</button>
+      <button class="dn" data-page="goals"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.500"/><circle cx="12" cy="12" r="4.500"/><circle cx="12" cy="12" r="1"/></svg>Goals</button>
+      <button class="dn" data-page="review"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 4-6"/></svg>Review</button>
+      <div class="dgroup">Extend</div>
+      <button class="dn" data-page="skills"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M9 10h6M9 14h6"/></svg>Skills</button>
+      <button class="dn" data-page="commands"><svg viewBox="0 0 24 24"><path d="M4 17l6-5-6-5M12 19h8"/></svg>Commands</button>
+      <button class="dn" data-page="agents"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c.6-4 3.300-6 7-6s6.400 2 7 6"/><path d="M17.500 4.500l1.500-1.500M19.500 8H21"/></svg>Agents</button>
+      <button class="dn" data-page="plugins"><svg viewBox="0 0 24 24"><path d="M9 3v4M15 3v4M7 7h10v5a5 5 0 01-10 0zM12 17v4"/></svg>Plugins</button>
+      <button class="dn" data-page="mcp"><svg viewBox="0 0 24 24"><path d="M9 3v6M15 3v6M6 9h12v3a6 6 0 01-12 0zM12 18v3"/></svg>MCP servers</button>
+      <button class="dn" data-page="hooks"><svg viewBox="0 0 24 24"><path d="M8 3v8a4 4 0 008 0V9"/><path d="M13 6l3 3 3-3"/><path d="M8 15v6"/></svg>Hooks</button>
+      <button class="dn" data-page="scheduled"><svg viewBox="0 0 24 24"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="9"/></svg>Scheduled</button>
+      <button class="dn" data-page="worktrees"><svg viewBox="0 0 24 24"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 7v10M18 10c0 4-6 3-6 7"/></svg>Worktrees</button>
+      <div class="dgroup">This computer</div>
+      <button class="dn" data-page="keyboard"><svg viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>Keyboard</button>
+      <button class="dn" data-page="hardware"><svg viewBox="0 0 24 24"><path d="M4 6h16v10H4zM2 20h20"/></svg>Hardware</button>
+      <button class="dn" data-page="advanced"><svg viewBox="0 0 24 24"><path d="M14 4l6 6-9 9H5v-6l9-9z"/></svg>Advanced</button>
+      </div>
+    </nav>
+    <div class="dpane">
+      <button class="dclose" id="settings-close" title="Close" aria-label="Close settings"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <div id="settings-pane"></div>
+    </div>
+  </div>
+</div>
+
+<!-- the MSHMOE kernel, as its own tool -->
+<div class="scrim" id="kernel-modal" role="dialog" aria-modal="true" aria-label="Kernel">
+  <div class="kdialog">
+    <nav class="dnav">
+      <div class="dgroup">Domain</div>
+      <select class="field" id="kernel-domain" aria-label="Domain"><option value="thren">Thren</option><option value="nour">Nour chimes</option></select>
+      <div class="dgroup">Examples</div>
+      <div id="kernel-examples"></div>
+    </nav>
+    <div class="kmain">
+      <button class="dclose" id="kernel-close" title="Close" aria-label="Close the kernel"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <h2>Logic lab</h2>
+      <p class="pgsub">The MSHMOE kernel answers questions about the domain chosen on the left and marks every answer with how it knows it. It never guesses silently. Input is its controlled language, one statement per line.</p>
+      <textarea class="field mono" id="kernel-input" spellcheck="false" placeholder="ask value q-metal conductance"></textarea>
+      <div class="kbar"><button class="btn primary" id="kernel-run">Run</button><span class="fine" id="kernel-note">Ctrl Enter runs it. No model is used.</span></div>
+      <div id="kernel-out"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/core.js"></script>
+<script src="/js/sessions.js"></script>
+<script src="/js/events.js"></script>
+<script src="/js/conversation.js"></script>
+<script src="/js/panes.js"></script>
+<script src="/js/dialogs.js"></script>
+<script src="/js/composer.js"></script>
+<script src="/js/menus.js"></script>
+<script src="/js/settings.js"></script>
+<script src="/js/beginner.js"></script>
+<script src="/js/welcome.js"></script>
+<script src="/js/boot.js"></script>
+</body>
+</html>

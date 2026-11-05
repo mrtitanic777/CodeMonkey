@@ -1,0 +1,23 @@
+# Example hooks. Copy to hooks.yaml and adjust the commands.
+#
+# Each hook runs its command with JSON on stdin:
+#   {"event": "pre_tool", "tool": "bash", "args": {"cmd": "ls"}}
+# and reads a JSON decision from stdout:
+#   {"allow": true}
+#   {"allow": false, "message": "reason shown to the model"}
+#   {"allow": true, "modified_args": {"cmd": "ls -la"}}
+#   {"note": "appended to the tool result as a [hook note]"}
+#
+# Timeouts (default 10s), non-zero exits, and bad JSON all fail OPEN with a
+# logged warning: hooks can slow or annotate the agent, never break it.
+
+hooks:
+  # Safety guard: block recursive deletes and absolute-path writes.
+  - event: pre_tool
+    command: hooks/examples/block-dangerous.py
+    timeout: 5
+
+  # Audit trail: append every tool call + result to a JSONL log.
+  - event: post_tool
+    command: hooks/examples/audit-log.py
+    timeout: 5

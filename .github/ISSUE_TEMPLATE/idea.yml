@@ -1,0 +1,15 @@
+name: An idea
+description: Something CodeMonkey could do, or do better.
+labels: [idea]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      description: What you'd do with it, more than how it should work.
+    validations:
+      required: true
+  - type: textarea
+    id: now
+    attributes:
+      label: What do you do today instead?

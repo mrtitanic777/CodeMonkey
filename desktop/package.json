@@ -1,0 +1,22 @@
+{
+  "name": "codemonkey-desktop",
+  "productName": "CodeMonkey",
+  "version": "0.0.3",
+  "description": "CodeMonkey in its own window: starts the Python web UI and shows it in Electron.",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "icon": "electron scripts/make-icon.js",
+    "package": "electron-packager . CodeMonkey --platform=win32 --arch=x64 --out=dist --overwrite --asar --icon=build/icon.ico --win32metadata.FileDescription=CodeMonkey --win32metadata.ProductName=CodeMonkey --ignore=^/dist --ignore=^/scripts --ignore=^/installer.nsi --ignore=^/unix",
+    "installer": "npm run package && node scripts/make-installer.js",
+    "release": "npm version patch --no-git-tag-version && npm run installer",
+    "standalone": "npm run package && node scripts/make-standalone.js",
+    "unix": "node scripts/make-unix.js",
+    "release-info": "node scripts/release-info.js"
+  },
+  "devDependencies": {
+    "@electron/packager": "^20.3.0",
+    "electron": "^33.2.1"
+  }
+}

@@ -1,0 +1,4 @@
+# Where a copy of CodeMonkey looks for new versions: a link to the release file that
+# `npm run release-info` (in desktop/) writes. Put the link on the first line that is not a
+# comment; a Google Drive or Dropbox share link ("anyone with the link") works as it is.
+# Every build made after this is set carries it. Settings > What's new can override it per copy.

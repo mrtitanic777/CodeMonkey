@@ -1,0 +1,902 @@
+[
+ {
+  "id": "N-B2-01",
+  "category": "KNOWN",
+  "mirror_of": "B2-01",
+  "english": "Quick one: what's the linkance of o-tone, and what category of thing is wettle?",
+  "input": "ask value o-tone linkance\nask class wettle",
+  "expect": [
+   {
+    "goal": "value(o-tone, linkance)",
+    "state": "KNOWN",
+    "value": "1.5 S·rd/(vx·beat)"
+   },
+   {
+    "goal": "class(wettle)",
+    "state": "KNOWN",
+    "value": "seep"
+   }
+  ]
+ },
+ {
+  "id": "N-B2-02",
+  "category": "KNOWN",
+  "mirror_of": "B2-02",
+  "english": "I've got a little piece of mote I'm calling k and a puddle of brume called p. What's k's harm threshold, what's its resting tarn, and what class does p belong to?",
+  "input": "let k = mote\nlet p = brume\nask value k crack_threshold\nask value k resting_tarn\nask class p",
+  "expect": [
+   {
+    "goal": "value(k, crack_threshold)",
+    "state": "KNOWN",
+    "value": "225 vx"
+   },
+   {
+    "goal": "value(k, resting_tarn)",
+    "state": "KNOWN",
+    "value": "100 vx"
+   },
+   {
+    "goal": "class(p)",
+    "state": "KNOWN",
+    "value": "seep"
+   }
+  ]
+ },
+ {
+  "id": "N-B2-03",
+  "category": "DERIVED",
+  "mirror_of": "B2-03",
+  "english": "A orrin bar I'll call bar, sitting at 3000 vx, is pressed against a telkane slab called slab at 1500 vx, and the link path is 10 t long. What's the flow rate between bar and slab, and which direction does the saph move?",
+  "input": "let bar = orrin tarn 3000 vx\nlet slab = telkane tarn 1500 vx\nrel abuts bar slab reach 10 rd\nask rate bar slab\nask passes bar slab",
+  "expect": [
+   {
+    "goal": "rate(bar, slab)",
+    "state": "DERIVED",
+    "value": "225 S/beat"
+   },
+   {
+    "goal": "passes(bar, slab)",
+    "state": "DERIVED",
+    "value": "bar → slab"
+   }
+  ],
+  "laws": [
+   "N1"
+  ]
+ },
+ {
+  "id": "N-B2-04",
+  "category": "DERIVED",
+  "mirror_of": "B2-04",
+  "english": "Rod r is orrin at 2.5 Gdg and it's touching a lump of shalk, b, which is at 500 vx. The link reach is 16 t. How fast does saph pass between r and b?",
+  "input": "let r = orrin tarn 2.5 Kvx\nlet b = shalk tarn 500 vx\nrel abuts r b reach 16 rd\nask rate r b",
+  "expect": [
+   {
+    "goal": "rate(r, b)",
+    "state": "DERIVED",
+    "value": "187.5 S/beat"
+   }
+  ],
+  "laws": [
+   "N1"
+  ]
+ },
+ {
+  "id": "N-B2-05",
+  "category": "DERIVED",
+  "mirror_of": "B2-05",
+  "english": "We had a orrin ingot, i, at 2250 vx, and when someone checked it, it wasn't glimming. Afterwards its tarn went up by 400 vx. Is i glimming now, and if so, what color?",
+  "input": "let i = orrin tarn 2250 vx keen silent\nshift i tarn 400 vx\nask has keen i\nask keen i",
+  "expect": [
+   {
+    "goal": "has(keen, i)",
+    "state": "DERIVED",
+    "value": "yes"
+   },
+   {
+    "goal": "keen(i)",
+    "state": "DERIVED",
+    "value": "treble"
+   }
+  ],
+  "laws": [
+   "N2"
+  ]
+ },
+ {
+  "id": "N-B2-06",
+  "category": "DERIVED",
+  "mirror_of": "B2-06",
+  "english": "A bit of mote, k, is pressed up against a telkane slab m whose tarn is 0.225 Gdg. Does k get cracked? And which way would saph move between m and k?",
+  "input": "let k = mote\nlet m = telkane tarn 0.225 Kvx\nrel abuts k m\nask cracked k\nask passes m k",
+  "expect": [
+   {
+    "goal": "cracked(k)",
+    "state": "DERIVED",
+    "value": "no"
+   },
+   {
+    "goal": "passes(m, k)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   }
+  ],
+  "laws": [
+   "N5",
+   "N1"
+  ]
+ },
+ {
+  "id": "N-B2-07",
+  "category": "DERIVED",
+  "mirror_of": "B2-07",
+  "english": "There's a lump of orrin, q, glimming bass, and a piece of mote, k, is touching it. Is k hurt? And what can we say about q's tarn?",
+  "input": "let q = orrin keen bass\nlet k = mote\nrel abuts k q\nask cracked k\nask tarn q",
+  "expect": [
+   {
+    "goal": "cracked(k)",
+    "state": "DERIVED",
+    "value": "yes"
+   },
+   {
+    "goal": "tarn(q)",
+    "state": "DERIVED",
+    "value": "at least 4500 vx"
+   }
+  ],
+  "laws": [
+   "N2",
+   "N5"
+  ]
+ },
+ {
+  "id": "N-B2-08",
+  "category": "DERIVED",
+  "mirror_of": "B2-08",
+  "english": "Which is more conductive, telk or o-tone? And is orrin's linkance greater than telk's?",
+  "input": "ask compare linkance telk o-tone\nask compare linkance orrin telk",
+  "expect": [
+   {
+    "goal": "compare(linkance, telk, o-tone)",
+    "state": "DERIVED",
+    "value": "telk < o-tone"
+   },
+   {
+    "goal": "compare(linkance, orrin, telk)",
+    "state": "DERIVED",
+    "value": "orrin > telk"
+   }
+  ]
+ },
+ {
+  "id": "N-B2-09",
+  "category": "DERIVED",
+  "mirror_of": "B2-09",
+  "english": "Suppose wimble is a kind of seep. A pool of wimble, g, abuts both a orrin plate a at 2000 vx and a shalk block b at 500 vx. Is there link passage between a and b, which way does saph flow between them, and what's the rate?",
+  "input": "teach wimble isa seep\nlet g = wimble\nlet a = orrin tarn 2000 vx\nlet b = shalk tarn 500 vx\nrel abuts g a\nrel abuts g b\nask link a b\nask passes a b\nask rate a b",
+  "expect": [
+   {
+    "goal": "link(a, b)",
+    "state": "DERIVED",
+    "value": "yes"
+   },
+   {
+    "goal": "passes(a, b)",
+    "state": "DERIVED",
+    "value": "a → b"
+   },
+   {
+    "goal": "rate(a, b)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   }
+  ],
+  "laws": [
+   "N7",
+   "N1"
+  ]
+ },
+ {
+  "id": "N-B2-10",
+  "category": "DERIVED",
+  "mirror_of": "B2-10",
+  "english": "A orrin rod r is glimming tenor, and it's touching a telkane slab s at 3250 vx over a 4 t reach. What range is r's tarn in? Which direction does saph go between r and s, and how fast?",
+  "input": "let r = orrin keen tenor\nlet s = telkane tarn 3250 vx\nrel abuts r s reach 4 rd\nask tarn r\nask passes r s\nask rate r s",
+  "expect": [
+   {
+    "goal": "tarn(r)",
+    "state": "DERIVED",
+    "value": "from 3500 to below 4500 vx"
+   },
+   {
+    "goal": "passes(r, s)",
+    "state": "DERIVED",
+    "value": "r → s"
+   },
+   {
+    "goal": "rate(r, s)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   }
+  ],
+  "laws": [
+   "N2",
+   "N1"
+  ]
+ },
+ {
+  "id": "N-B2-11",
+  "category": "DERIVED",
+  "mirror_of": "B2-11",
+  "english": "A orrin core c at 1500 vx has a loam wrap w around it, and the wrap is soaked with wettle, u. A shalk block b at 500 vx is touching the wrap. Is there link passage between c and b? If so, what's the passage rate?",
+  "input": "let c = orrin tarn 1500 vx\nlet w = loam\nlet u = wettle\nlet b = shalk tarn 500 vx\nrel sheathes w c\nrel steeps u w\nrel abuts b w\nask link c b\nask rate c b",
+  "expect": [
+   {
+    "goal": "link(c, b)",
+    "state": "DERIVED",
+    "value": "yes"
+   },
+   {
+    "goal": "rate(c, b)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   }
+  ],
+  "laws": [
+   "N6",
+   "N7"
+  ]
+ },
+ {
+  "id": "N-B2-12",
+  "category": "DERIVED",
+  "mirror_of": "B2-12",
+  "english": "Two orrin pieces: x is at exactly 3.5 Gdg, y is at 2.495 Gdg. What colour is each one glimming, if at all?",
+  "input": "let x = orrin tarn 3.5 Kvx\nlet y = orrin tarn 2.495 Kvx\nask keen x\nask keen y",
+  "expect": [
+   {
+    "goal": "keen(x)",
+    "state": "DERIVED",
+    "value": "tenor"
+   },
+   {
+    "goal": "keen(y)",
+    "state": "DERIVED",
+    "value": "silent"
+   }
+  ],
+  "laws": [
+   "N2"
+  ]
+ },
+ {
+  "id": "N-B2-13",
+  "category": "DERIVED",
+  "mirror_of": "B2-13",
+  "english": "Somebody reported orrin block z, at 3250 vx, as glimming bass. After that report, z's tarn was raised by 1.5 Gdg. What's z's tarn now and what color is it glimming?",
+  "input": "let z = orrin tarn 3250 vx keen bass\nshift z tarn 1.5 Kvx\nask tarn z\nask keen z",
+  "expect": [
+   {
+    "goal": "tarn(z)",
+    "state": "DERIVED",
+    "value": "4750 vx"
+   },
+   {
+    "goal": "keen(z)",
+    "state": "DERIVED",
+    "value": "bass"
+   }
+  ],
+  "laws": [
+   "N2"
+  ]
+ },
+ {
+  "id": "N-B2-14",
+  "category": "DERIVED",
+  "mirror_of": "B2-14",
+  "english": "A orrin lump q at 4750 vx is wrapped in loam, f. A bit of mote, k, is touching the loam wrap and also has a clear line of hears to q. Which way does saph move between q and k, and is k cracked?",
+  "input": "let q = orrin tarn 4750 vx\nlet f = loam\nlet k = mote\nrel sheathes f q\nrel abuts k f\nrel hears q k\nask passes q k\nask cracked k",
+  "expect": [
+   {
+    "goal": "passes(q, k)",
+    "state": "DERIVED",
+    "value": "q → k"
+   },
+   {
+    "goal": "cracked(k)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   }
+  ],
+  "laws": [
+   "N2",
+   "N4",
+   "N6",
+   "N5"
+  ]
+ },
+ {
+  "id": "N-B2-15",
+  "category": "DERIVED",
+  "mirror_of": "B2-15",
+  "english": "Orrin plate p was seen glimming treble, and a later measurement put p at 3100 vx. It abuts a shalk brick b at 1600 vx, with a 8 t link reach. What's p's tarn, and at what rate does saph pass between p and b?",
+  "input": "let p = orrin keen treble\nlet b = shalk tarn 1600 vx\nobserve p tarn 3100 vx\nrel abuts p b reach 8 rd\nask tarn p\nask rate p b",
+  "expect": [
+   {
+    "goal": "tarn(p)",
+    "state": "KNOWN",
+    "value": "3100 vx"
+   },
+   {
+    "goal": "rate(p, b)",
+    "state": "DERIVED",
+    "value": "281.25 S/beat"
+   }
+  ],
+  "laws": [
+   "N2",
+   "N1"
+  ]
+ },
+ {
+  "id": "N-B2-16",
+  "category": "DERIVED",
+  "mirror_of": "B2-16",
+  "english": "Busy bench: a orrin core c at 4000 vx sits inside a loam wrap w that's soaked with brume s. Nearby there's a shalk block b at 300 vx, a telkane slab m at 150 vx, and a piece of mote k that abuts both m and b. Is k cracked? And does b keen?",
+  "input": "let c = orrin tarn 4000 vx\nlet w = loam\nlet s = brume\nlet b = shalk tarn 300 vx\nlet m = telkane tarn 150 vx\nlet k = mote\nrel sheathes w c\nrel steeps s w\nrel abuts k m\nrel abuts k b\nask cracked k\nask has keen b",
+  "expect": [
+   {
+    "goal": "cracked(k)",
+    "state": "DERIVED",
+    "value": "yes"
+   },
+   {
+    "goal": "has(keen, b)",
+    "state": "DERIVED",
+    "value": "no"
+   }
+  ],
+  "laws": [
+   "N5",
+   "N3"
+  ]
+ },
+ {
+  "id": "N-B2-17",
+  "category": "UNKNOWN_REFERENCE",
+  "mirror_of": "B2-17",
+  "english": "A moxi, call it k, is touching a orrin bar q at 1500 vx. Is k cracked? And does q keen at all?",
+  "input": "let k = moxi\nlet q = orrin tarn 1500 vx\nrel abuts k q\nask cracked k\nask has keen q",
+  "expect": [
+   {
+    "goal": "cracked(k)",
+    "state": "UNKNOWN_REFERENCE",
+    "value": "unknown"
+   },
+   {
+    "goal": "has(keen, q)",
+    "state": "UNKNOWN_REFERENCE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-B2-18",
+  "category": "UNKNOWN_REFERENCE",
+  "mirror_of": "B2-18",
+  "english": "A orrin block a at 1500 vx abuts b across a reach of 4 t (I haven't told you what b is). What's the rate between a and b? Also, does a keen?",
+  "input": "let a = orrin tarn 1500 vx\nrel abuts a b reach 4 rd\nask rate a b\nask has keen a",
+  "expect": [
+   {
+    "goal": "rate(a, b)",
+    "state": "UNKNOWN_REFERENCE",
+    "value": "unknown"
+   },
+   {
+    "goal": "has(keen, a)",
+    "state": "UNKNOWN_REFERENCE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-B2-19",
+  "category": "UNKNOWN_REFERENCE",
+  "mirror_of": "B2-19",
+  "english": "My orrin sample s is at 3750 vx and it's glimming shrill. Does s keen, and what's its tarn? Oh, and what's orrin's linkance?",
+  "input": "let s = orrin tarn 3750 vx keen shrill\nask has keen s\nask tarn s\nask value orrin linkance",
+  "expect": [
+   {
+    "goal": "has(keen, s)",
+    "state": "UNKNOWN_REFERENCE",
+    "value": "unknown"
+   },
+   {
+    "goal": "tarn(s)",
+    "state": "UNKNOWN_REFERENCE",
+    "value": "unknown"
+   },
+   {
+    "goal": "value(orrin, linkance)",
+    "state": "UNKNOWN_REFERENCE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-B2-20",
+  "category": "LOW_CONFIDENCE",
+  "mirror_of": "B2-20",
+  "english": "Got a slab of veskit, d, at 3000 vx. Does it keen, and what colour?",
+  "input": "let d = veskit tarn 3000 vx\nask has keen d\nask keen d",
+  "expect": [
+   {
+    "goal": "has(keen, d)",
+    "state": "LOW_CONFIDENCE",
+    "value": "unknown"
+   },
+   {
+    "goal": "keen(d)",
+    "state": "LOW_CONFIDENCE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-B2-21",
+  "category": "LOW_CONFIDENCE",
+  "mirror_of": "B2-21",
+  "english": "A telkain block m at 1750 vx is touching a orrin bar q at 750 vx, 8 t link reach. What's the rate between m and q? Unrelated, but what's the linkance of orrin?",
+  "input": "let m = telkain tarn 1750 vx\nlet q = orrin tarn 750 vx\nrel abuts m q reach 8 rd\nask rate m q\nask value orrin linkance",
+  "expect": [
+   {
+    "goal": "rate(m, q)",
+    "state": "LOW_CONFIDENCE",
+    "value": "unknown"
+   },
+   {
+    "goal": "value(orrin, linkance)",
+    "state": "LOW_CONFIDENCE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-B2-22",
+  "category": "LOW_CONFIDENCE",
+  "mirror_of": "B2-22",
+  "english": "A loa wrap f goes around a orrin rod r at 2000 vx, and a shalk block b at 500 vx leans on the wrap. Is there link passage between r and b?",
+  "input": "let f = loa\nlet r = orrin tarn 2000 vx\nlet b = shalk tarn 500 vx\nrel sheathes f r\nrel abuts b f\nask link r b",
+  "expect": [
+   {
+    "goal": "link(r, b)",
+    "state": "LOW_CONFIDENCE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-B2-23",
+  "category": "CONFLICTED",
+  "mirror_of": "B2-23",
+  "english": "A telkain block m at 1750 vx is touching a orrin bar q at 750 vx with a 8 t link reach. What's the passage rate, and which way does saph go from one to the other? By 'telkain' I mean telkane.",
+  "input": "let m = telkain tarn 1750 vx\nlet q = orrin tarn 750 vx\nrel abuts m q reach 8 rd\nask rate m q\nask passes m q\nconfirm telkain means telkane",
+  "expect": [
+   {
+    "goal": "rate(m, q)",
+    "state": "CONFLICTED",
+    "value": "either 75 S/beat or 125 S/beat"
+   },
+   {
+    "goal": "passes(m, q)",
+    "state": "DERIVED",
+    "value": "m → q"
+   }
+  ],
+  "laws": [
+   "N1"
+  ]
+ },
+ {
+  "id": "N-B2-24",
+  "category": "CONFLICTED",
+  "mirror_of": "B2-24",
+  "english": "Roughly how conductive is telk? And what class is it in?",
+  "input": "estimate value telk linkance\nask class telk",
+  "expect": [
+   {
+    "goal": "value(telk, linkance)",
+    "state": "CONFLICTED",
+    "value": "either 0.6 S·rd/(vx·beat) or 1 S·rd/(vx·beat)"
+   },
+   {
+    "goal": "class(telk)",
+    "state": "KNOWN",
+    "value": "dullrock"
+   }
+  ]
+ },
+ {
+  "id": "N-B2-25",
+  "category": "CONFLICTED",
+  "mirror_of": "B2-25",
+  "english": "Orrin piece g is at 3250 vx, but an observer reports seeing it glimming bass. Another orrin piece, h, was given as 1500 vx, yet a second reading of h came out at 1700 vx. What colour is g glimming? What's h's tarn, and does h keen?",
+  "input": "let g = orrin tarn 3250 vx\nobserve g keen bass\nlet h = orrin tarn 1500 vx\nobserve h tarn 1700 vx\nask keen g\nask tarn h\nask has keen h",
+  "expect": [
+   {
+    "goal": "keen(g)",
+    "state": "CONFLICTED",
+    "value": "unknown"
+   },
+   {
+    "goal": "tarn(h)",
+    "state": "CONFLICTED",
+    "value": "either 1500 vx or 1700 vx"
+   },
+   {
+    "goal": "has(keen, h)",
+    "state": "DERIVED",
+    "value": "no"
+   }
+  ],
+  "laws": [
+   "N2"
+  ]
+ },
+ {
+  "id": "N-B2-26",
+  "category": "CONFLICTED",
+  "mirror_of": "B2-26",
+  "english": "Someone claims they saw a shalk brick s glimming treble. So what's s's keen, and what tarn is it at?",
+  "input": "let s = shalk keen treble\nask keen s\nask tarn s",
+  "expect": [
+   {
+    "goal": "keen(s)",
+    "state": "CONFLICTED",
+    "value": "unknown"
+   },
+   {
+    "goal": "tarn(s)",
+    "state": "CONFLICTED",
+    "value": "unknown"
+   }
+  ],
+  "laws": [
+   "N3"
+  ]
+ },
+ {
+  "id": "N-B2-27",
+  "category": "MISSING_KNOWLEDGE",
+  "mirror_of": "B2-27",
+  "english": "A lump of veskite d at 2000 vx is touching a orrin plate q at 1000 vx, with a 8 t reach. Give me your best guess for the passage rate between d and q, and tell me which way saph passes.",
+  "input": "let d = veskite tarn 2000 vx\nlet q = orrin tarn 1000 vx\nrel abuts d q reach 8 rd\nestimate rate d q\nask passes d q",
+  "expect": [
+   {
+    "goal": "rate(d, q)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   },
+   {
+    "goal": "passes(d, q)",
+    "state": "DERIVED",
+    "value": "d → q"
+   }
+  ],
+  "laws": [
+   "N1"
+  ]
+ },
+ {
+  "id": "N-B2-28",
+  "category": "MISSING_KNOWLEDGE",
+  "mirror_of": "B2-28",
+  "english": "What's the linkance of veskite? And if you had to guess, what would brume's linkance be?",
+  "input": "ask value veskite linkance\nestimate value brume linkance",
+  "expect": [
+   {
+    "goal": "value(veskite, linkance)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   },
+   {
+    "goal": "value(brume, linkance)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-B2-29",
+  "category": "MISSING_KNOWLEDGE",
+  "mirror_of": "B2-29",
+  "english": "A mote patch k at 150 vx abuts a telkane slab m at 1250 vx; nobody measured the link reach. Which way does saph flow between m and k, what's the rate, and is k cracked?",
+  "input": "let k = mote tarn 150 vx\nlet m = telkane tarn 1250 vx\nrel abuts k m\nask passes m k\nask rate m k\nask cracked k",
+  "expect": [
+   {
+    "goal": "passes(m, k)",
+    "state": "DERIVED",
+    "value": "m → k"
+   },
+   {
+    "goal": "rate(m, k)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   },
+   {
+    "goal": "cracked(k)",
+    "state": "DERIVED",
+    "value": "yes"
+   }
+  ],
+  "laws": [
+   "N1",
+   "N5"
+  ]
+ },
+ {
+  "id": "N-B2-30",
+  "category": "MISSING_KNOWLEDGE",
+  "mirror_of": "B2-30",
+  "english": "A orrin rod r is glimming treble and touching a shalk block b that's at 3 Gdg. Which way will saph flow between r and b? Is r's tarn higher than b's? And does b keen?",
+  "input": "let r = orrin keen treble\nlet b = shalk tarn 3 Kvx\nrel abuts r b\nask passes r b\nask compare tarn r b\nask has keen b",
+  "expect": [
+   {
+    "goal": "passes(r, b)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   },
+   {
+    "goal": "compare(tarn, r, b)",
+    "state": "MISSING_KNOWLEDGE",
+    "value": "unknown"
+   },
+   {
+    "goal": "has(keen, b)",
+    "state": "DERIVED",
+    "value": "no"
+   }
+  ],
+  "laws": [
+   "N2",
+   "N1",
+   "N3"
+  ]
+ },
+ {
+  "id": "N-B2-31",
+  "category": "OUT_OF_BOUNDARY",
+  "mirror_of": "B2-31",
+  "english": "A telkane slab m sits at 2.505 Gdg and abuts a orrin bar q at 500 vx; the link reach is 6 t. Which way does saph flow, and at what rate?",
+  "input": "let m = telkane tarn 2.505 Kvx\nlet q = orrin tarn 500 vx\nrel abuts m q reach 6 rd\nask passes m q\nask rate m q",
+  "expect": [
+   {
+    "goal": "passes(m, q)",
+    "state": "DERIVED",
+    "value": "m → q"
+   },
+   {
+    "goal": "rate(m, q)",
+    "state": "OUT_OF_BOUNDARY",
+    "value": "unknown"
+   }
+  ],
+  "laws": [
+   "N1"
+  ]
+ },
+ {
+  "id": "N-B2-32",
+  "category": "OUT_OF_BOUNDARY",
+  "mirror_of": "B2-32",
+  "english": "Two pairs on the bench. Orrin plate p at 2250 vx abuts shalk block b at 500 vx over 10 t, and then p's tarn gets bumped up by 300 vx. Separately, orrin piece x at 1500 vx abuts telkane piece y at 1000 vx with a reach of 0 t. What are the rates for p–b and x–y, and what's p glimming?",
+  "input": "let p = orrin tarn 2250 vx\nlet b = shalk tarn 500 vx\nlet x = orrin tarn 1500 vx\nlet y = telkane tarn 1000 vx\nrel abuts p b reach 10 rd\nrel abuts x y reach 0 rd\nshift p tarn 300 vx\nask rate p b\nask rate x y\nask keen p",
+  "expect": [
+   {
+    "goal": "rate(p, b)",
+    "state": "OUT_OF_BOUNDARY",
+    "value": "unknown"
+   },
+   {
+    "goal": "rate(x, y)",
+    "state": "OUT_OF_BOUNDARY",
+    "value": "unknown"
+   },
+   {
+    "goal": "keen(p)",
+    "state": "DERIVED",
+    "value": "treble"
+   }
+  ],
+  "laws": [
+   "N1",
+   "N2"
+  ]
+ },
+ {
+  "id": "N-B2-33",
+  "category": "UNKNOWN_STRUCTURE",
+  "mirror_of": "B2-33",
+  "english": "Five separate things on the table: a orrin bar q at 3000 vx, a shalk block b at 1500 vx, a telkane slab m at 1000 vx, a puddle of brume s, and a bit of mote k. q abuts b with a 8 t reach. What's the rate between q and b, and does q keen?",
+  "input": "let q = orrin tarn 3000 vx\nlet b = shalk tarn 1500 vx\nlet m = telkane tarn 1000 vx\nlet s = brume\nlet k = mote\nrel abuts q b reach 8 rd\nask rate q b\nask has keen q",
+  "expect": [
+   {
+    "goal": "rate(q, b)",
+    "state": "UNKNOWN_STRUCTURE",
+    "value": "unknown"
+   },
+   {
+    "goal": "has(keen, q)",
+    "state": "UNKNOWN_STRUCTURE",
+    "value": "unknown"
+   }
+  ]
+ },
+ {
+  "id": "N-B2-34",
+  "category": "UNKNOWN_STRUCTURE",
+  "mirror_of": "B2-34",
+  "english": "What's the density of orrin? And while you're at it, its linkance?",
+  "input": "ask value orrin density\nask value orrin linkance",
+  "expect": [
+   {
+    "goal": "value(orrin, density)",
+    "state": "UNKNOWN_STRUCTURE",
+    "value": "unknown"
+   },
+   {
+    "goal": "value(orrin, linkance)",
+    "state": "KNOWN",
+    "value": "1.5 S·rd/(vx·beat)"
+   }
+  ]
+ },
+ {
+  "id": "N-B2-35",
+  "category": "AMBIGUOUS_PATTERN",
+  "mirror_of": "B2-35",
+  "english": "Picture a orrin core a wrapped in loam, f. A shalk block b is pressed against the wrap. A puddle of wettle, u, is also touching both a and b. Is there link passage between a and b?",
+  "input": "let a = orrin\nlet f = loam\nlet b = shalk\nlet u = wettle\nrel sheathes f a\nrel abuts b f\nrel abuts u a\nrel abuts u b\nask link a b",
+  "expect": [
+   {
+    "goal": "link(a, b)",
+    "state": "AMBIGUOUS_PATTERN",
+    "value": "unknown"
+   }
+  ],
+  "laws": [
+   "N6",
+   "N7"
+  ]
+ },
+ {
+  "id": "N-B2-36",
+  "category": "AMBIGUOUS_PATTERN",
+  "mirror_of": "B2-36",
+  "english": "A telkane slab m is wrapped up in loam g. A orrin bar q at 4100 vx abuts the outside of that wrap, and a brume film s abuts both q and m. Is there any link passage between q and m? And what color is q glimming?",
+  "input": "let m = telkane\nlet q = orrin tarn 4100 vx\nlet g = loam\nlet s = brume\nrel sheathes g m\nrel abuts q g\nrel abuts s m\nrel abuts s q\nask link q m\nask keen q",
+  "expect": [
+   {
+    "goal": "link(q, m)",
+    "state": "AMBIGUOUS_PATTERN",
+    "value": "unknown"
+   },
+   {
+    "goal": "keen(q)",
+    "state": "DERIVED",
+    "value": "tenor"
+   }
+  ],
+  "laws": [
+   "N6",
+   "N7",
+   "N2"
+  ]
+ },
+ {
+  "id": "N-B2-37",
+  "category": "NO_VALID_RULE",
+  "mirror_of": "B2-37",
+  "english": "Does the loam wrap w keen? What colour would a puddle of wettle, u, at 4000 vx keen? And is shalk something that glims?",
+  "input": "let w = loam\nlet u = wettle tarn 4000 vx\nask has keen w\nask keen u\nask has keen shalk",
+  "expect": [
+   {
+    "goal": "has(keen, w)",
+    "state": "NO_VALID_RULE",
+    "value": "unknown"
+   },
+   {
+    "goal": "keen(u)",
+    "state": "NO_VALID_RULE",
+    "value": "unknown"
+   },
+   {
+    "goal": "has(keen, shalk)",
+    "state": "DERIVED",
+    "value": "no"
+   }
+  ],
+  "laws": [
+   "N3"
+  ]
+ },
+ {
+  "id": "N-B2-38",
+  "category": "NO_VALID_RULE",
+  "mirror_of": "B2-38",
+  "english": "A orrin rod q at 2250 vx and a shalk block b at 500 vx can see each other but aren't touching. Which way does saph go between q and b? Also, a bit of mote k is in line of hears of a orrin lump h that's glimming tenor, though k abuts nothing. Is k cracked, and which way does saph move between h and k?",
+  "input": "let q = orrin tarn 2250 vx\nlet b = shalk tarn 500 vx\nlet k = mote\nlet h = orrin keen tenor\nrel hears q b\nrel hears h k\nask passes q b\nask cracked k\nask passes h k",
+  "expect": [
+   {
+    "goal": "passes(q, b)",
+    "state": "NO_VALID_RULE",
+    "value": "unknown"
+   },
+   {
+    "goal": "cracked(k)",
+    "state": "NO_VALID_RULE",
+    "value": "unknown"
+   },
+   {
+    "goal": "passes(h, k)",
+    "state": "DERIVED",
+    "value": "h → k"
+   }
+  ],
+  "laws": [
+   "N2",
+   "N4",
+   "N5"
+  ]
+ },
+ {
+  "id": "N-B2-39",
+  "category": "CONFABULATED",
+  "mirror_of": "B2-39",
+  "english": "There's a veskite nugget d at 3250 vx. Does it keen, and if so what colour?",
+  "input": "let d = veskite tarn 3250 vx\nask has keen d\nask keen d",
+  "expect": [
+   {
+    "goal": "has(keen, d)",
+    "state": "CONFABULATED",
+    "value": "possibly yes"
+   },
+   {
+    "goal": "keen(d)",
+    "state": "CONFABULATED",
+    "value": "possibly treble"
+   }
+  ],
+  "laws": [
+   "N2"
+  ]
+ },
+ {
+  "id": "N-B2-40",
+  "category": "CONFABULATED",
+  "mirror_of": "B2-40",
+  "english": "Ballpark figures, please: what's the linkance of veskite, and of orrin? Also, let's say jusk is a type of resonant. A jusk bar v is at 4.75 Gdg — what colour does it keen?",
+  "input": "estimate value veskite linkance\nestimate value orrin linkance\nteach jusk isa resonant\nlet v = jusk tarn 4.75 Kvx\nask keen v",
+  "expect": [
+   {
+    "goal": "value(veskite, linkance)",
+    "state": "CONFABULATED",
+    "value": "possibly 1.5 S·rd/(vx·beat)"
+   },
+   {
+    "goal": "value(orrin, linkance)",
+    "state": "KNOWN",
+    "value": "1.5 S·rd/(vx·beat)"
+   },
+   {
+    "goal": "keen(v)",
+    "state": "CONFABULATED",
+    "value": "possibly bass"
+   }
+  ],
+  "laws": [
+   "N2"
+  ]
+ }
+]
