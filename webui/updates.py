@@ -7,8 +7,10 @@ The file is either just a version ("0.4.4") or JSON:
      "downloads": {"windows": "<link>", "linux-x64": "<link>", "pi-64": "<link>", "pi-32": "<link>", "mac": "<link>"}}
 
 `npm run release-info` (desktop/) writes it for a release. A Google Drive or Dropbox share link works
-as it is: it is turned into the link that gives the file itself. Nothing is downloaded or installed
-here; the person is shown where the new version is.
+as it is: it is turned into the link that gives the file itself. A GitHub repository's address
+(github.com/<owner>/<repo>) works too: its latest release is read through GitHub's API, and the
+installers attached to it become the downloads. Nothing is downloaded or installed here; the person
+is shown where the new version is.
 """
 
 from __future__ import annotations
@@ -25,7 +27,7 @@ import urllib.parse
 import urllib.request
 from typing import Any, Dict, Optional, Tuple
 
-_MAX_BYTES = 64 * 1024
+_MAX_BYTES = 256 * 1024   # a GitHub release's answer, with its attached files listed, is a few dozen KB
 _DAY = 24 * 3600
 
 
@@ -57,6 +59,32 @@ def direct_link(url: str) -> str:
         query["dl"] = "1"
         return urllib.parse.urlunparse(parts._replace(query=urllib.parse.urlencode(query)))
     return url
+
+
+_GITHUB = re.compile(r"^https?://github\.com/([\w.-]+)/([\w.-]+?)(?:\.git)?(?:/releases(?:/latest)?)?/?$", re.I)
+# which attached file is for which computer, by the names `npm run standalone` and `npm run unix` give them
+_ASSET_SYSTEMS = (("windows", re.compile(r"windows.*\.exe$", re.I)), ("linux-x64", re.compile(r"linux-x64", re.I)),
+                  ("pi-64", re.compile(r"raspberrypi-64", re.I)), ("pi-32", re.compile(r"raspberrypi-32", re.I)),
+                  ("mac", re.compile(r"mac", re.I)))
+
+
+def github_api(url: str) -> str:
+    """The API address of a GitHub repository's latest release, or "" when *url* is not a repository."""
+    m = _GITHUB.match((url or "").strip())
+    return f"https://api.github.com/repos/{m.group(1)}/{m.group(2)}/releases/latest" if m else ""
+
+
+def from_github(text: str) -> Dict[str, Any]:
+    """GitHub's latest-release answer in the release file's own shape."""
+    rel = json.loads(text)
+    downloads: Dict[str, str] = {}
+    for asset in rel.get("assets") or []:
+        for system, rx in _ASSET_SYSTEMS:
+            if rx.search(str(asset.get("name") or "")) and system not in downloads:
+                downloads[system] = str(asset.get("browser_download_url") or "")
+    return {"version": str(rel.get("tag_name") or rel.get("name") or "").lstrip("vV"),
+            "date": str(rel.get("published_at") or "")[:10], "notes": str(rel.get("body") or ""),
+            "page": str(rel.get("html_url") or ""), "downloads": downloads}
 
 
 def version_tuple(text: str) -> Tuple[int, ...]:
@@ -114,8 +142,9 @@ class Updates:
             result["error"] = "no update link is set"
         else:
             try:
-                text = (fetch or _fetch)(direct_link(result["url"]))
-                data = parse(text)
+                api = github_api(result["url"])
+                text = (fetch or _fetch)(api or direct_link(result["url"]))
+                data = parse(json.dumps(from_github(text)) if api else text)
                 result["latest"] = str(data["version"]).strip()
                 result["notes"] = str(data.get("notes") or "")[:2000]
                 result["page"] = str(data.get("page") or "")
@@ -153,7 +182,10 @@ class Updates:
 
 
 def _fetch(url: str) -> str:
-    req = urllib.request.Request(url, headers={"User-Agent": "CodeMonkey update check"})
+    headers = {"User-Agent": "CodeMonkey update check"}
+    if url.startswith("https://api.github.com/"):
+        headers["Accept"] = "application/vnd.github+json"
+    req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310 - the link the person set
         raw = resp.read(_MAX_BYTES + 1)
     if len(raw) > _MAX_BYTES:

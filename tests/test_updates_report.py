@@ -37,6 +37,33 @@ def test_share_links_become_the_file_and_versions_compare():
         raise AssertionError(bad)
 
 
+def test_a_github_repository_is_read_through_its_latest_release():
+    assert updates.github_api("https://github.com/someone/Tool") == "https://api.github.com/repos/someone/Tool/releases/latest"
+    assert updates.github_api("https://github.com/someone/Tool/releases/") == updates.github_api("https://github.com/someone/Tool")
+    assert updates.github_api("https://example.com/latest.json") == ""
+    release = {"tag_name": "v9.1.0", "published_at": "2030-01-02T03:04:05Z", "body": "Better things.",
+               "html_url": "https://github.com/someone/Tool/releases/tag/v9.1.0", "assets": [
+                   {"name": f"CodeMonkey-9.1.0-{n}", "browser_download_url": f"https://dl.example/{n}"}
+                   for n in ("Windows.exe", "Linux-x64.tar.gz", "RaspberryPi-64bit.tar.gz", "RaspberryPi-32bit.tar.gz")]}
+    asked = []
+
+    def fetch(url):
+        asked.append(url)
+        return json.dumps(release)
+
+    class _App:
+        settings = {"update_url": "https://github.com/someone/Tool"}
+
+    result = updates.Updates(_App(), ROOT).check(fetch)
+    assert asked == ["https://api.github.com/repos/someone/Tool/releases/latest"], asked
+    assert result["latest"] == "9.1.0" and result["newer"] and result["notes"] == "Better things.", result
+    assert result["download"] == "https://dl.example/" + {"windows": "Windows.exe", "linux-x64": "Linux-x64.tar.gz",
+                                                         "pi-64": "RaspberryPi-64bit.tar.gz", "pi-32": "RaspberryPi-32bit.tar.gz",
+                                                         "mac": ""}.get(updates.this_system(), ""), result
+    # the copy that ships asks this repository's own releases
+    assert updates.link_file(ROOT) == "https://github.com/mrtitanic777/CodeMonkey"
+
+
 class _Release(BaseHTTPRequestHandler):
     body = b""
 
