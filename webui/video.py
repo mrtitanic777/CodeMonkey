@@ -6,6 +6,7 @@ scene plus frames spread evenly between them, so nothing long goes unseen. Each 
 model about 150 tokens at 512 pixels wide, which is why it is never every frame (a minute of video
 at 30 frames a second would fill a 256K window); the model asks again for a closer look at a part
 (start and end).
+What is said is read by whisper.cpp when it is set up (speech_dir()), as lines with times.
 
     watch(project_dir, "videos/clip.mp4", frames_dir)       -> text with picture markers (images.py)
     save_video(project_dir, "https://example.com/clip.mp4")  -> videos/clip.mp4
@@ -151,10 +152,92 @@ def watch(project_dir: str, path: str, frames_dir: str, start: float = 0, end: f
            f"{len(scenes)} change(s) of scene found; frames at those and spread evenly between")
     head = [f"{path}: {clock(duration)} long, {info['width']}×{info['height']}, "
             f"{'has sound' if info['audio'] else 'no sound'}. {len(lines)} frames{part} ({how}), in order:"]
+    said: List[str] = []
     if info["audio"]:
-        head.append("The sound is not heard: you see the pictures only. Say so if the answer depends on what is said.")
+        said = heard(full, os.path.dirname(frames_dir.rstrip("/\\")), start, end)
     tail = ["To look closer at a part, call again with start and end (seconds)."] if end - start > most else []
-    return "\n".join(head + lines + tail)
+    return "\n".join(head + lines + said + tail)
+
+
+# ------------------------------------------------------------------ sound ---
+
+#: The longest transcript given back in one go; a longer one says to ask for a part.
+MOST_SAID = 12000
+
+
+def speech_dir() -> str:
+    """Where the speech-to-text program and its model live: outside the project and the app, so
+    neither grows by it. CODEMONKEY_SPEECH points somewhere else."""
+    return os.environ.get("CODEMONKEY_SPEECH") or os.path.join(
+        os.environ.get("LOCALAPPDATA") or os.path.expanduser("~/.local/share"), "CodeMonkey", "speech")
+
+
+def whisper() -> Optional[Tuple[str, str]]:
+    """(whisper.cpp's whisper-cli, its model file), or None when speech-to-text is not set up."""
+    base = speech_dir()
+    exe = next((p for p in (os.path.join(base, "bin", "Release", "whisper-cli.exe"), os.path.join(base, "bin", "whisper-cli.exe"),
+                            os.path.join(base, "bin", "whisper-cli")) if os.path.isfile(p)), None) or shutil.which("whisper-cli")
+    models = sorted(glob.glob(os.path.join(base, "ggml-*.bin")))
+    return (exe, models[0]) if exe and models else None
+
+
+def transcribe(video: str, work_dir: str) -> List[Tuple[float, float, str]]:
+    """What is said in *video*, as (from, to, text) in seconds. Kept beside the frames by the file's
+    size and time, so asking about a part again does not transcribe it all again."""
+    import hashlib
+
+    tool = whisper()
+    if tool is None:
+        raise RuntimeError("speech-to-text is not set up")
+    st = os.stat(video)
+    key = hashlib.sha1(f"{os.path.realpath(video)}|{st.st_size}|{st.st_mtime}|{os.path.basename(tool[1])}".encode()).hexdigest()[:16]
+    cache = os.path.join(work_dir, "transcripts", key + ".json")
+    if os.path.isfile(cache):
+        with open(cache, encoding="utf-8") as fh:
+            return [tuple(x) for x in json.load(fh)]
+    os.makedirs(os.path.dirname(cache), exist_ok=True)
+    wav, out = cache[:-5] + ".wav", cache[:-5] + "-whisper"
+    _run([ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-i", video, "-vn", "-ac", "1", "-ar", "16000",
+          "-c:a", "pcm_s16le", wav], 900)
+    try:
+        threads = str(max(2, min(8, (os.cpu_count() or 4) // 2)))
+        _run([tool[0], "-m", tool[1], "-f", wav, "-t", threads, "-np", "-oj", "-of", out], 3600)
+        with open(out + ".json", encoding="utf-8", errors="replace") as fh:
+            data = json.load(fh)
+    finally:
+        for leftover in (wav, out + ".json"):
+            try:
+                os.remove(leftover)
+            except OSError:
+                pass
+    pieces = [(s["offsets"]["from"] / 1000.0, s["offsets"]["to"] / 1000.0, str(s.get("text") or "").strip())
+              for s in data.get("transcription") or []]
+    pieces = [p for p in pieces if p[2] and not re.fullmatch(r"[\[(][^\])]*[\])]", p[2])]   # [BLANK_AUDIO], (music)
+    with open(cache, "w", encoding="utf-8") as fh:
+        json.dump(pieces, fh)
+    return pieces
+
+
+def heard(video: str, work_dir: str, start: float, end: float) -> List[str]:
+    """Lines saying what is said between *start* and *end*, for the model."""
+    if whisper() is None:
+        return ["The sound is not heard (speech-to-text is not set up): you see the pictures only. "
+                "Say so if the answer depends on what is said."]
+    try:
+        pieces = [p for p in transcribe(video, work_dir) if p[1] > start and p[0] < end]
+    except Exception as exc:  # noqa: BLE001 - the pictures still stand
+        return [f"The sound could not be transcribed ({exc}): you see the pictures only."]
+    if not pieces:
+        return ["What is said: nothing (no speech in this part)."]
+    lines, size = ["What is said (transcribed by a small speech-to-text model: names and rare words may be wrong):"], 0
+    for a, _, text in pieces:
+        line = f"[{clock(a)}] {text}"
+        size += len(line)
+        if size > MOST_SAID:
+            lines.append(f"... (more is said after {clock(a)}: call again with start={int(a)} to read on)")
+            break
+        lines.append(line)
+    return lines
 
 
 def save_video(project_dir: str, url: str, path: str = "") -> str:

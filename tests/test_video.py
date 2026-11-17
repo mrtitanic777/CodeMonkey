@@ -128,3 +128,47 @@ def test_a_session_shows_pictures_to_the_model_chosen_in_the_menu():
             s.close()
         finally:
             server.shutdown()
+
+
+def test_what_is_said_comes_with_times(monkeypatch, tmp_path):
+    import webui.video as video
+
+    monkeypatch.setattr(video, "whisper", lambda: None)
+    assert "not set up" in video.heard("x.mp4", str(tmp_path), 0, 10)[0]
+    monkeypatch.setattr(video, "whisper", lambda: ("whisper-cli", "ggml-base.en.bin"))
+    monkeypatch.setattr(video, "transcribe", lambda v, w: [(0.0, 2.0, "Welcome."), (65.0, 70.0, "Add salt.")])
+    lines = video.heard("x.mp4", str(tmp_path), 0, 80)
+    assert lines[1:] == ["[0:00] Welcome.", "[1:05] Add salt."]
+    assert video.heard("x.mp4", str(tmp_path), 60, 80)[1:] == ["[1:05] Add salt."], "only the part asked about"
+    assert "nothing" in video.heard("x.mp4", str(tmp_path), 10, 20)[0]
+
+
+def _spoken_video(folder):
+    """A clip with a sentence said by Windows' own voice (no download), or None elsewhere."""
+    if os.name != "nt":
+        return None
+    wav, mp4 = os.path.join(folder, "say.wav"), os.path.join(folder, "say.mp4")
+    script = ("Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+              f"$s.SetOutputToWaveFile('{wav}'); $s.Speak('The secret ingredient is a spoonful of honey.'); $s.Dispose()")
+    done = subprocess.run(["powershell", "-NoProfile", "-Command", script], capture_output=True)
+    if done.returncode or not os.path.isfile(wav):
+        return None
+    subprocess.run([ffmpeg(), "-loglevel", "error", "-y", "-f", "lavfi", "-i", "color=c=red:s=320x180:r=10", "-i", wav,
+                    "-shortest", "-pix_fmt", "yuv420p", "-c:a", "aac", mp4], check=True, capture_output=True)
+    return mp4
+
+
+@needs_ffmpeg
+def test_a_spoken_video_is_heard():
+    import webui.video as video
+
+    if video.whisper() is None:
+        pytest.skip("speech-to-text is not set up")
+    with tempfile.TemporaryDirectory() as tmp:
+        clip = _spoken_video(tmp)
+        if clip is None:
+            pytest.skip("no voice to make a spoken clip with")
+        work = os.path.join(tmp, "work")
+        said = watch(tmp, "say.mp4", os.path.join(work, "frames"))
+        assert "has sound" in said and "What is said" in said and "honey" in said.lower(), said
+        assert os.listdir(os.path.join(work, "transcripts")), "kept, so a closer look does not transcribe again"

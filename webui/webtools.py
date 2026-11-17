@@ -171,7 +171,8 @@ def video_tools(project_dir, frames_dir) -> List[Tool]:
             description=(
                 "Watch a video file in the project: you are shown frames from it in order (one a second for a "
                 f"short clip; for a longer one, frames at each change of scene and spread evenly, {DEFAULT_FRAMES} "
-                f"by default, at most {MOST_FRAMES}). You see the pictures, not the sound. Call again with start "
+                f"by default, at most {MOST_FRAMES}), and what is said in it, with times, when speech-to-text is set "
+                "up. Call again with start "
                 "and end to look closer at a part."
             ),
             parameters={
