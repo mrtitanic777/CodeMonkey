@@ -7,14 +7,15 @@
    people talk, and the transcript keeps it like any other message.
 
    Speaking starts with the first finished sentence of the reply, not at its end. The voice is
-   Piper when it is set up (the page plays it, so the microphone's echo cancelling hears it and
-   you can talk over it to interrupt); otherwise the system's voices, which play outside the page,
+   Kokoro (or Piper) when it is set up: the page plays it, so the microphone's echo cancelling hears
+   it and you can talk over it to interrupt. Otherwise the system's voices, which play outside the page,
    so the microphone waits while it talks and a click (or Space) interrupts instead. */
 
 var CALL = {
   on: false, state: "idle", muted: false, stream: null, ctx: null, node: null, src: null,
   noise: 0.006, inSpeech: false, hearing: 0, lastParts: null, loud: 0, quiet: 0, pre: [], chunks: [], level: 0,
-  spoken: 0, replying: false, ended: false, queue: [], playing: null, voice: "system", hearOk: true,
+  spoken: 0, replying: false, ended: false, playing: null, voice: "system", hearOk: true,
+  out: null, endAt: 0, sources: [], making: 0, chain: Promise.resolve(), gen: 0, pending: [], saidAny: false, flushTimer: null,
   el: null
 };
 var CALL_RATE = 16000, CALL_FRAME = 1024;            // 64 ms a frame
@@ -37,7 +38,9 @@ function callHeard(text, who) {
 function startCall() {
   if (CALL.on) return;
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toastError(new Error("This window has no microphone access.")); return; }
-  CALL.on = true; CALL.muted = false; CALL.spoken = 0; CALL.replying = false; CALL.queue = [];
+  CALL.on = true; CALL.muted = false; CALL.spoken = 0; CALL.replying = false; CALL.pending = [];
+  // the reply's voice plays on its own clock; made here, in the click, so the browser lets it play
+  try { CALL.out = CALL.out || new (window.AudioContext || window.webkitAudioContext)(); CALL.out.resume(); } catch (e) {}
   callOverlay();
   callStatus("starting");
   fetch("/api/speech").then(function (r) { return r.json(); }).then(function (s) {
@@ -154,7 +157,7 @@ function callSend(parts) {
         if (!text || /^[\s.,!?-]*$/.test(text)) { callStatus("listening"); return; }
         callHeard(text, "you");
         callStatus("thinking");
-        CALL.spoken = 0; CALL.replying = true; CALL.ended = false; CALL.queue = [];
+        CALL.spoken = 0; CALL.replying = true; CALL.ended = false; CALL.pending = []; CALL.saidAny = false;
         addUserMsg(text);
         var cid = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
         S.sentIds[cid] = 1;
@@ -190,29 +193,63 @@ function callSentences(text, final) {
   return out.filter(function (s) { return /[A-Za-z0-9]/.test(s); });
 }
 
+/* The reply is said in stretches, not sentence by sentence: a voice made one sentence at a time
+   starts each one afresh and sounds clipped. The first sentence goes alone, so speaking starts at
+   once; after that, whatever sentences have been written by the time the voice is about to run out
+   go together (the model writes much faster than anyone talks, so a stretch is usually two to four
+   sentences). The stretches play back to back on one clock (Web Audio), with a short breath
+   between them instead of the gap a new audio file would leave. */
+var CALL_BREATH = 0.12, CALL_LONGEST = 420;
+
 function callOnToken(d) {
   if (!CALL.on || !CALL.replying) return;
-  callSentences(d.text || "", false).forEach(callSay);
+  CALL.pending = CALL.pending.concat(callSentences(d.text || "", false));
+  callFlush(false);
 }
 
 function callOnTurnEnd() {
   if (!CALL.on || !CALL.replying) return;
   var text = (S.turn && S.turn.reply && S.turn.reply._text) || "";
-  callSentences(text, true).forEach(callSay);
+  CALL.pending = CALL.pending.concat(callSentences(text, true));
   CALL.replying = false; CALL.ended = true;
-  if (!CALL.playing && !CALL.queue.length) callStatus("listening");
+  callFlush(true);
+  callAfterSaying();
 }
 
 function callOnPermission() {
-  if (CALL.on) { callSay("I need your OK on the screen for that."); }
+  if (CALL.on) { CALL.pending.push("I need your OK on the screen for that."); callFlush(true); }
 }
 
-function callSay(sentence) {
-  if (!CALL.on || !sentence) return;
-  callHeard(sentence, "it");
+function callAhead() {
+  // seconds of speech already made and waiting to be heard, and whether more is being made
+  if (CALL.voice === "system") return window.speechSynthesis && window.speechSynthesis.pending ? 9 : 0;
+  var left = CALL.out ? Math.max(0, CALL.endAt - CALL.out.currentTime) : 0;
+  return CALL.making ? 9 : left;
+}
+
+function callFlush(final) {
+  if (!CALL.on || !CALL.pending.length) return;
+  if (!CALL.saidAny) { CALL.saidAny = true; callSay(CALL.pending.shift()); }
+  if (!CALL.pending.length) return;
+  if (!final && callAhead() > 1.2) {           // plenty still to hear: let more sentences gather
+    clearTimeout(CALL.flushTimer);
+    CALL.flushTimer = setTimeout(function () { callFlush(!CALL.replying); }, 250);
+    return;
+  }
+  var stretch = "";
+  while (CALL.pending.length && (stretch.length + CALL.pending[0].length < CALL_LONGEST || !stretch)) {
+    stretch += (stretch ? " " : "") + CALL.pending.shift();
+  }
+  callSay(stretch);
+  if (CALL.pending.length) callFlush(final);
+}
+
+function callSay(text) {
+  if (!CALL.on || !text) return;
+  callHeard(text, "it");
   if (CALL.voice === "system") {
     if (!window.speechSynthesis) return;
-    var u = new SpeechSynthesisUtterance(sentence);
+    var u = new SpeechSynthesisUtterance(text);
     var ui = (S.settings && S.settings.ui) || {};
     var chosen = (window.speechSynthesis.getVoices() || []).filter(function (v) { return v.name === ui.voice; })[0];
     if (chosen) u.voice = chosen;
@@ -221,29 +258,38 @@ function callSay(sentence) {
     window.speechSynthesis.speak(u);
     return;
   }
-  // Piper: fetched now, played in turn, so the next sentence is ready while this one plays
-  var item = { audio: null, ready: fetch("/api/speak", { method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text: sentence }) }).then(function (r) { if (!r.ok) throw new Error("voice"); return r.blob(); }) };
-  CALL.queue.push(item);
-  if (!CALL.playing) callPlayNext();
-}
-
-function callPlayNext() {
-  var item = CALL.queue.shift();
-  if (!item) { CALL.playing = null; callAfterSaying(); return; }
-  CALL.playing = item;
-  item.ready.then(function (blob) {
-    if (!CALL.on || CALL.playing !== item) return;
-    var a = new Audio(URL.createObjectURL(blob));
-    item.audio = a;
+  // made on the server now; played in order, each starting where the last one ends
+  var gen = CALL.gen;
+  CALL.making++;
+  var ready = fetch("/api/speak", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: text }) })
+    .then(function (r) { if (!r.ok) throw new Error("voice"); return r.arrayBuffer(); })
+    .then(function (bytes) { return CALL.out.decodeAudioData(bytes); });
+  CALL.chain = CALL.chain.then(function () { return ready; }).then(function (buf) {
+    CALL.making--;
+    if (!CALL.on || gen !== CALL.gen) return;
+    var src = CALL.out.createBufferSource();
+    src.buffer = buf;
+    src.connect(CALL.out.destination);
+    var now = CALL.out.currentTime;
+    var at = CALL.endAt > now ? CALL.endAt + CALL_BREATH : now + 0.02;
+    src.start(at);
+    CALL.endAt = at + buf.duration;
+    CALL.sources.push(src);
     callStatus("speaking"); VOICE.talking = true; updateFace();
-    a.onended = a.onerror = function () { URL.revokeObjectURL(a.src); if (CALL.playing === item) callPlayNext(); };
-    return a.play();
-  }).catch(function () { CALL.voice = "system"; if (CALL.playing === item) callPlayNext(); });
+    src.onended = function () {
+      CALL.sources = CALL.sources.filter(function (s) { return s !== src; });
+      callAfterSaying();
+    };
+  }).catch(function () {
+    CALL.making = Math.max(0, CALL.making - 1);
+    if (gen === CALL.gen) { CALL.voice = "system"; callSay(text); }   // the voice failed: the system's says it
+  });
 }
 
 function callAfterSaying() {
-  var busy = CALL.voice === "system" ? window.speechSynthesis && window.speechSynthesis.speaking : CALL.playing || CALL.queue.length;
+  var busy = CALL.voice === "system" ? window.speechSynthesis && window.speechSynthesis.speaking
+    : CALL.sources.length || CALL.making || CALL.pending.length;
   if (busy) return;
   VOICE.talking = false; $("face") && $("face").classList.remove("open"); updateFace();
   if (CALL.on) callStatus(CALL.replying ? "thinking" : "listening");
@@ -251,8 +297,11 @@ function callAfterSaying() {
 
 function callStopSpeaking() {
   try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch (e) {}
-  var p = CALL.playing; CALL.queue = []; CALL.playing = null;
-  if (p && p.audio) { try { p.audio.pause(); } catch (e) {} }
+  CALL.gen++;                                  // anything still being made is dropped when it arrives
+  CALL.sources.forEach(function (s) { try { s.stop(); } catch (e) {} });
+  CALL.sources = []; CALL.pending = []; CALL.making = 0; CALL.endAt = 0; CALL.playing = null;
+  CALL.chain = Promise.resolve();
+  clearTimeout(CALL.flushTimer);
   VOICE.talking = false; updateFace();
 }
 

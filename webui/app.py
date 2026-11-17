@@ -203,9 +203,12 @@ def is_local(base_url: str) -> bool:
 
 #: Added to what the model is sent (not to what the transcript shows) for a message said in a call.
 VOICE_NOTE = (
-    "[Said aloud in a voice call; your answer is read out. Answer the way you would say it: short, plain "
-    "spoken sentences, no lists, tables, headings, code or links unless asked. If you change files or "
-    "run something, say in a sentence what you did. What was heard may have small mistakes in it.]")
+    "[Said aloud in a voice call; a voice reads your answer out. Talk the way a friendly person talks on "
+    "the phone: relaxed, natural sentences of mixed length, contractions (I'm, it's, you'll), and words like "
+    "so, well or okay where they would come naturally. Lead with the answer, keep it short, and offer more "
+    "instead of covering everything. No lists, tables, headings, code, links, emoji or symbols unless asked. "
+    "If you change files or run something, say in a sentence what you did. What was heard may have small "
+    "mistakes in it.]")
 
 
 def tool_group(name: str) -> str:
@@ -3053,6 +3056,8 @@ class WebApp:
         "lean_local",
         "call_voice",
         "call_speed",
+        "call_blend",
+        "call_blend_pct",
         "claim_labels",
         "code_gate",
         "gate_tests",
@@ -3105,6 +3110,9 @@ class WebApp:
             # a voice call's voice (webui/speech.py; "" is the default one) and how fast it talks
             "call_voice": "",
             "call_speed": 1.0,
+            # a second voice mixed into the first (often warmer than either alone), and how much of it
+            "call_blend": "",
+            "call_blend_pct": 30,
             "claim_labels": True,
             # off | check (refuse what cannot be right; report broken tests) | strict (and undo the change)
             "code_gate": "check",
@@ -3166,6 +3174,11 @@ class WebApp:
             settings["risky_check"] = "on"
         settings["lean_local"] = bool(settings.get("lean_local", True))
         settings["call_voice"] = str(settings.get("call_voice") or "")[:40]
+        settings["call_blend"] = str(settings.get("call_blend") or "")[:40]
+        try:
+            settings["call_blend_pct"] = max(0, min(70, int(settings.get("call_blend_pct") or 0)))
+        except (TypeError, ValueError):
+            settings["call_blend_pct"] = 30
         try:
             settings["call_speed"] = max(0.5, min(2.0, float(settings.get("call_speed") or 1.0)))
         except (TypeError, ValueError):

@@ -490,17 +490,23 @@ PAGES.general = function (pane) {
     });
     sub.textContent = "Lifelike voices made on this computer (Kokoro). Heart is the default.";
     callRow.appendChild(selectControl(named, st.call_voice || sp.chosen, function (v) { saveSetting({ call_voice: v }); }));
+    var blendPick = selectControl([["", "No blend"]].concat(named), st.call_blend || "", function (v) { saveSetting({ call_blend: v }); });
+    var blendPct = selectControl([["15", "A touch (15%)"], ["30", "Some (30%)"], ["45", "Lots (45%)"], ["60", "Mostly (60%)"]],
+      String(st.call_blend_pct || 30), function (v) { saveSetting({ call_blend_pct: parseInt(v, 10) }); });
     callRow.appendChild(button("Try it", function () {
-      var pick = callRow.querySelector("select").value;
       fetch("/api/speak", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: "Hi! This is how I'll sound when we talk. Ask me anything.", voice: pick }) })
+        body: JSON.stringify({ text: "Hi! So, this is how I'll sound when we talk. Ask me anything, and I'll do my best.",
+          voice: callRow.querySelector("select").value, blend: blendPick.value, blend_pct: parseInt(blendPct.value, 10) }) })
         .then(function (r) { if (!r.ok) throw new Error("The voice could not speak."); return r.blob(); })
         .then(function (b) { var a = new Audio(URL.createObjectURL(b)); a.onended = function () { URL.revokeObjectURL(a.src); }; return a.play(); })
         .catch(toastError);
     }));
+    var after = callRow.nextSibling;
+    pane.insertBefore(row("srow", "Blend in a second voice", "Mixing two voices often sounds warmer and more natural than either alone. Try it above to hear the mix",
+      blendPick, blendPct), after);
     pane.insertBefore(row("srow", "Call speed", "How fast the call voice talks",
       selectControl([["0.9", "A little slower"], ["1", "Normal"], ["1.1", "A little faster"], ["1.25", "Faster"]],
-        String(st.call_speed || 1), function (v) { saveSetting({ call_speed: parseFloat(v) }); })), callRow.nextSibling);
+        String(st.call_speed || 1), function (v) { saveSetting({ call_speed: parseFloat(v) }); })), after);
   }).catch(function () {});
   pane.appendChild(h("h3", "", "Status line"));
   pane.appendChild(h("p", "pgsub", "A quiet row under the message box. Pick what it shows; your own command can add one more " +

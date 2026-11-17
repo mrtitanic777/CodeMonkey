@@ -182,19 +182,43 @@ def _wav(samples, rate: int) -> bytes:
     return buf.getvalue()
 
 
-def speak(text: str, voice: str = "", speed: float = 1.0) -> bytes:
-    """*text* said by the voice set up (Kokoro, else Piper), as a WAV file's bytes.
+#: Written shorthand a voice would read letter by letter, or stumble over, and what is said instead.
+_SAID = [
+    (r"\be\.g\.,?", "for example,"), (r"\bi\.e\.,?", "that is,"), (r"\betc\.", "and so on."),
+    (r"\bvs\.?(?=\s)", "versus"), (r"\s&\s", " and "), (r"\s*(->|\u2192)\s*", " to "),
+    (r"\s+[\u2014\u2013-]\s+", ", "), (r"\u2026", "..."), (r"(?<=\d)\s*%", " percent"),
+    (r"[\U0001F000-\U0001FAFF\u2600-\u27BF\uFE0F]", ""),        # emoji: nothing to say
+    (r"[*_#`~|<>\[\]{}]+", " "),
+]
+
+
+def spoken(text: str) -> str:
+    """*text* as it should be said: shorthand spelled out, symbols and emoji left out, spaces tidied."""
+    text = str(text or "")
+    for pattern, said in _SAID:
+        text = re.sub(pattern, said, text, flags=re.I)
+    text = re.sub(r"\s+", " ", text)
+    return re.sub(r"\s+([,.!?;:])", r"\1", text).strip()
+
+
+def speak(text: str, voice: str = "", speed: float = 1.0, blend: str = "", blend_pct: int = 0) -> bytes:
+    """*text* said by the voice set up (Kokoro, else Piper), as a WAV file's bytes. With Kokoro, *blend*
+    mixes a second voice in (*blend_pct* of it): blends often sound warmer than either voice alone.
     RuntimeError when no voice is set up, so the page speaks with the system's voices."""
     engine = _kokoro()
     if engine is not None:
-        text = re.sub(r"\s+", " ", str(text or "")).strip()[:2000]
+        text = spoken(text)[:2000]
         if not text:
             return b""
         names = engine.get_voices()
         chosen = voice if voice in names else (DEFAULT_VOICE if DEFAULT_VOICE in names else names[0])
         lang = "en-gb" if chosen[:1] == "b" else "en-us"
+        style = chosen
+        share = max(0, min(70, int(blend_pct or 0))) / 100.0
+        if blend in names and blend != chosen and share > 0:
+            style = engine.get_voice_style(chosen) * (1 - share) + engine.get_voice_style(blend) * share
         with _KOKORO["lock"]:
-            samples, rate = engine.create(text, voice=chosen, speed=max(0.5, min(2.0, float(speed or 1.0))), lang=lang)
+            samples, rate = engine.create(text, voice=style, speed=max(0.5, min(2.0, float(speed or 1.0))), lang=lang)
         return _wav(samples, rate)
     tool = piper()
     if tool is None:

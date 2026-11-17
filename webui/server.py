@@ -1254,8 +1254,12 @@ class WebHandler(BaseHTTPRequestHandler):
                 body = self._read_json()
                 text = str(body.get("text") or "")
                 try:
-                    data = speech.speak(text, str(body.get("voice") or self.app.settings.get("call_voice") or ""),
-                                        float(self.app.settings.get("call_speed") or 1.0))
+                    trying = "voice" in body   # Settings' Try it: the voice and blend it names
+                    data = speech.speak(
+                        text, str(body.get("voice") or self.app.settings.get("call_voice") or ""),
+                        float(self.app.settings.get("call_speed") or 1.0),
+                        str((body.get("blend") or "") if trying else (self.app.settings.get("call_blend") or "")),
+                        int((body.get("blend_pct") or 0) if trying else (self.app.settings.get("call_blend_pct") or 0)))
                 except RuntimeError as exc:
                     return self._error(str(exc), 404)   # the page speaks with the system's voices instead
                 except (OSError, subprocess.SubprocessError) as exc:

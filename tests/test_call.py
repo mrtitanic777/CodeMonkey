@@ -141,3 +141,38 @@ def test_call_voice_settings_are_kept_in_range():
             assert app.settings["call_speed"] == 1.0
         finally:
             server.shutdown()
+
+
+def test_written_shorthand_is_said_in_words():
+    assert speech.spoken("Use a dict, e.g. a map - about 40% faster 🚀") == "Use a dict, for example, a map, about 40 percent faster"
+    assert speech.spoken("**Done** in `app.py` — all tests pass…") == "Done in app.py, all tests pass..."
+    assert speech.spoken("Python vs. Rust & Go") == "Python versus Rust and Go"
+
+
+def test_a_blend_of_two_voices():
+    if speech.kokoro_files() is None:
+        pytest.skip("Kokoro is not set up")
+    engine = speech._kokoro()
+    seen = []
+    real = engine.create
+    engine.create = lambda text, voice, **k: (seen.append(voice), real(text, voice=voice, **k))[1]
+    try:
+        assert speech.speak("A short test.", "af_heart", 1.0, "af_bella", 30)[:4] == b"RIFF"
+        speech.speak("A short test.", "af_heart", 1.0, "af_heart", 30)
+    finally:
+        engine.create = real
+    heart, bella = engine.get_voice_style("af_heart"), engine.get_voice_style("af_bella")
+    assert abs(seen[0] - (heart * 0.7 + bella * 0.3)).max() < 1e-6, "30% of the second voice"
+    assert seen[1] == "af_heart", "a voice blended with itself is just itself"
+
+
+def test_blend_settings_are_kept_in_range():
+    from test_webui import start_server
+
+    with tempfile.TemporaryDirectory() as tmp:
+        app, server, base = start_server(tmp)
+        try:
+            app.update_settings({"call_blend": "af_bella", "call_blend_pct": 99})
+            assert app.settings["call_blend"] == "af_bella" and app.settings["call_blend_pct"] == 70
+        finally:
+            server.shutdown()
