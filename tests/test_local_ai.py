@@ -59,6 +59,77 @@ def test_lean_mode_offers_the_core_tools_and_loads_the_rest_on_request():
             server.shutdown()
 
 
+def test_one_off_requests_ask_a_local_server_not_to_keep_them():
+    from test_webui import start_server
+
+    with tempfile.TemporaryDirectory() as tmp:
+        app, server, base = start_server(tmp)
+        try:
+            app.config.providers["here"] = {"base_url": "http://127.0.0.1:9/v1", "api_key_env": "", "models": ["m"]}
+            app.config.providers["away"] = {"base_url": "https://api.example.com/v1", "api_key_env": "", "models": ["m"]}
+            s = app.create_session(tmp)
+            s.settings["provider"], s.settings["model"] = "here", "m"
+            assert s._raw_client(one_shot=True).params.get("strata_checkpoint") is False
+            assert "strata_checkpoint" not in s._raw_client().params     # the conversation itself is kept
+            s.settings["provider"] = "away"
+            assert "strata_checkpoint" not in s._raw_client(one_shot=True).params
+            s.close()
+        finally:
+            server.shutdown()
+
+
+def test_kessie_sessions_keep_one_conversation_and_their_own_memory():
+    from kessie_client import KeSSieClient
+    from test_webui import start_server
+
+    with tempfile.TemporaryDirectory() as tmp:
+        app, server, base = start_server(tmp)
+        try:
+            app.config.providers["kessie"] = {"base_url": "http://127.0.0.1:9/v1", "api_key_env": "",
+                                              "client": "kessie", "models": ["m"]}
+            s = app.create_session(tmp)
+            s.settings["provider"], s.settings["model"] = "kessie", "m"
+            turn = s._build_client()
+            assert isinstance(turn, KeSSieClient), "KeSSie keeps the history itself: no summarizing in front"
+            assert turn.conversation_id == "cm-" + s.id == s._raw_client().conversation_id
+            assert s._raw_client(one_shot=True).conversation_id != turn.conversation_id
+            s.close()
+        finally:
+            server.shutdown()
+
+
+def test_kessie_tool_calls_sent_already_parsed_are_used():
+    from kessie_client import KeSSieClient
+
+    class _Reply(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_POST(self):
+            self.rfile.read(int(self.headers["Content-Length"]))
+            body = json.dumps({"choices": [{"message": {"role": "assistant", "content": "", "tool_calls": [
+                {"id": "call_1", "type": "function", "function": {"name": "read", "arguments": "{\"path\": \"a\"}"}}]}}]}).encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _Reply)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        reply = KeSSieClient(f"http://127.0.0.1:{server.server_port}/v1", "", "m").chat([{"role": "user", "content": "x"}], [])
+        calls = reply["choices"][0]["message"]["tool_calls"]
+        assert [(c["function"]["name"], c["function"]["arguments"]) for c in calls] == [("read", "{\"path\": \"a\"}")]
+    finally:
+        server.shutdown()
+
+
+def test_a_kessie_provider_stays_kessie_when_saved():
+    from webui.providers import CLIENTS
+
+    assert "kessie" in CLIENTS
+
+
 class _Metrics(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass

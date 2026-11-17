@@ -134,6 +134,24 @@ function highlight(code) {
     .replace(/\u0007/g, '<span class="tok-n">').replace(/\u0008/g, "</span>");
 }
 
+/* ![description](path): a picture saved in the project, shown in the reply (the server checks it is a
+   picture inside the project). A web address is never loaded: a picture's address can carry text out
+   to any server, so it stays a link, and the model saves the picture first (picture_save). */
+function pictureHtml(m, alt, src) {
+  var raw = src.replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+  if (/^https?:\/\//i.test(raw)) {
+    return '<a href="' + src + '" target="_blank" rel="noopener noreferrer">picture: ' + (alt || "link") + "</a>";
+  }
+  if (!S.current || /^[a-z]+:/i.test(raw)) return m;
+  var url = "/api/sessions/" + S.current + "/picture?path=" + encodeURIComponent(raw.replace(/^\.\//, ""));
+  return '<img class="replypic" loading="lazy" src="' + url + '" alt="' + alt + '" title="' + (alt || src) + '">';
+}
+
+document.addEventListener("click", function (e) {   // a picture in a reply: click for full size, again to shrink
+  var pic = e.target && e.target.closest ? e.target.closest("img.replypic") : null;
+  if (pic) pic.classList.toggle("big");
+});
+
 function renderInline(s) {
   // inline code is protected first, then links, bold and italics
   var parts = [];
@@ -141,6 +159,7 @@ function renderInline(s) {
     parts.push(c);
     return "@@CODE" + (parts.length - 1) + "@@";
   });
+  out = out.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, pictureHtml);
   out = out.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
   out = out.replace(/\[\[([^\]|]{1,40})\|([^\]]{1,240})\]\]/g, function (m, w, d) { return termHtml(w, d); });   // Beginner mode's words
   out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");

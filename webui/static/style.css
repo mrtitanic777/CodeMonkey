@@ -1831,3 +1831,9 @@ html.noglass .welcome, html.noglass .nomodel { background: var(--panel); }
 .interrupted .btnrow { margin-top: 10px; }
 .interrupted .btnrow .btn { height: 30px; }
 .modelhealth { padding: 6px 12px 2px; font-size: 12px; color: var(--faint); line-height: 1.45; max-width: 320px; }
+
+/* 20. Pictures in replies: saved in the project (picture_save), shown at a readable size, full size on click */
+.replypic { display: block; max-width: min(100%, 560px); max-height: 380px; height: auto; margin: 6px 0 10px;
+  border-radius: 10px; border: 1px solid var(--line); cursor: zoom-in; object-fit: contain;
+  background: rgba(var(--tint), .03); }
+.replypic.big { max-width: 100%; max-height: none; cursor: zoom-out; }

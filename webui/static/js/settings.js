@@ -635,7 +635,7 @@ PAGES.models = function (pane) {
   pane.appendChild(h("p", "pgsub", "Any service that speaks the OpenAI chat API (OpenRouter, Groq, Together, Mistral, a vLLM box...), with the model names you want to use."));
   var nName = textField("Name, such as openrouter"), nUrl = textField("Address, such as https://openrouter.ai/api/v1");
   var nModels = textField("Model names, separated by commas"), nKey = textField("API key (optional)", "password");
-  var nKind = selectControl([["openai", "OpenAI-compatible"], ["anthropic", "Claude API (or a proxy for it)"]], "openai", function () {});
+  var nKind = selectControl([["openai", "OpenAI-compatible"], ["anthropic", "Claude API (or a proxy for it)"], ["kessie", "KeSSie (long memory in front of a local server)"]], "openai", function () {});
   var nVision = selectControl([["", "Text only"], ["1", "Can view images"]], "", function () {});
   var add = button("Add server", function () {
     add.disabled = true;

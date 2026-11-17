@@ -19,7 +19,7 @@ from typing import Any, Dict, List
 import keystore
 
 NAME_RE = re.compile(r"[a-z0-9][a-z0-9_-]{0,31}")
-CLIENTS = ("openai", "anthropic")
+CLIENTS = ("openai", "anthropic", "kessie")
 
 
 class Providers:

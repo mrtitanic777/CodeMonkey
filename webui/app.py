@@ -19,7 +19,7 @@ import threading
 import time
 import uuid
 from dataclasses import replace
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from coder import (
     CoderLoop,
@@ -131,7 +131,7 @@ def tool_kind(name: str) -> str:
 #: model has little context to spare, and three dozen tool descriptions on every request is a
 #: real cost; the model loads a group with tools_load when it needs it.
 TOOL_GROUPS = {
-    "web": ("Search the web and read pages", ("web_search", "web_fetch")),
+    "web": ("Search the web, read pages, save pictures to show", ("web_search", "web_fetch", "picture_save")),
     "browser": ("Drive a real browser: open, read, click, fill, screenshot", ()),   # browser_*
     "helpers": ("Start, list, steer and stop background helpers", (
         "delegate", "subagent_spawn", "subagent_list", "subagent_send", "subagent_close")),
@@ -827,6 +827,7 @@ class WebSession:
             self.browser = webtools.SessionBrowser(webtools.shot_dir(app.workspace, self.id))
         for tool in webtools.web_tools(self.browser):
             register_everywhere(registry, tool)
+        register_everywhere(registry, webtools.picture_tool(lambda: self.project_dir))
         for tool in app.jobs.tools(self):
             register_everywhere(registry, tool)
         register_everywhere(registry, app.artifact_tool(self))
@@ -1309,16 +1310,27 @@ class WebSession:
             return self._raw_client(p, m)   # helpers and background work have a model of their own
         return self._build_client(stream=False)   # a helper's words are not the main reply
 
-    def _raw_client(self, provider: Optional[str] = None, model: Optional[str] = None):
+    def _raw_client(self, provider: Optional[str] = None, model: Optional[str] = None, one_shot: bool = False):
         from kessie_client import KeSSieClient
 
+        provider = provider or self.settings["provider"]
         client = self.app.client_for(
-            provider or self.settings["provider"], model or self.settings.get("model") or self.config.model,
+            provider, model or self.settings.get("model") or self.config.model,
             str(getattr(self, "_turn_effort", "") or self.settings.get("effort", "auto")),
         )
+        entry = (self.config.providers or {}).get(provider) or {}
+        if one_shot and hasattr(client, "params") and is_local(str(entry.get("base_url") or "")):
+            # a request no later one carries on from (a suggestion, a commit message, a side question):
+            # a local server that keeps a few conversations ready (Strata) is told not to keep this one,
+            # so it does not push the real conversation out and make the next turn read it all again
+            client.params["strata_checkpoint"] = False
         if isinstance(client, KeSSieClient):
-            # KeSSie re-ingests history per request; keep it bounded.
+            # KeSSie re-ingests history per request; keep it bounded. It keeps each conversation's
+            # memory under the id it is sent, so a session's turns use the session's id (the same
+            # after a restart), and a one-off request a fresh one that does not mix into it.
             client.max_history_chars = int(self.settings["context_budget"]) * 4
+            if not one_shot:
+                client.conversation_id = "cm-" + self.id
         return client
 
     def context_window(self) -> int:
@@ -1455,6 +1467,12 @@ class WebSession:
                 client.on_progress = self._on_progress
             if hasattr(client, "on_thinking"):
                 client.on_thinking = self._on_thinking
+        from kessie_client import KeSSieClient
+
+        if isinstance(client, KeSSieClient):
+            # KeSSie keeps the whole conversation and recalls from it itself; a summary in place of
+            # the older messages would not match what it holds, and it would start over
+            return client
         wrapped, mgr = wrap_client_if_enabled(
             cfg, client, on_compact=self._on_compact_event
         )
@@ -1892,7 +1910,7 @@ class WebSession:
                     {"role": "user", "content": "The main conversation:\n\n" + transcript},
                     {"role": "assistant", "content": "Understood. What is your side question?"}]
         messages += side[-20:] + [{"role": "user", "content": question}]
-        reply = self._raw_client().chat(messages, [])
+        reply = self._raw_client(one_shot=True).chat(messages, [])
         answer = str((((reply or {}).get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
         side += [{"role": "user", "content": question}, {"role": "assistant", "content": answer}]
         return answer
@@ -1910,6 +1928,24 @@ class WebSession:
         if not str(rel or "").strip() or os.path.commonpath([root, target]) != root:
             raise ValueError("that path is not in this session's folder")
         return target
+
+    def picture_file(self, rel: str) -> Tuple[bytes, str]:
+        """A picture in the project, for a reply that shows it: (bytes, media type)."""
+        from .pictures import EXTENSIONS, MAX_BYTES, kind_of
+
+        path = self._inside(rel)
+        media = EXTENSIONS.get(os.path.splitext(path)[1].lower())
+        if not media:
+            raise ValueError("only PNG, JPEG, GIF, WebP and BMP pictures are shown")
+        if not os.path.isfile(path):
+            raise FileNotFoundError(f"no such picture: {rel}")
+        if os.path.getsize(path) > MAX_BYTES:
+            raise ValueError("this picture is too big to show")
+        with open(path, "rb") as fh:
+            data = fh.read()
+        if kind_of(data) is None:
+            raise ValueError("this file is not a picture")
+        return data, media
 
     def read_file(self, rel: str) -> Dict[str, Any]:
         path = self._inside(rel)
@@ -1960,7 +1996,7 @@ class WebSession:
                 turns.append(("User: " if m["role"] == "user" else "Assistant: ") + content.strip()[-1500:])
         if not turns or not any(t.startswith("Assistant: ") for t in turns):
             return ""
-        reply = self._raw_client().chat([{"role": "system", "content": self._SUGGEST_PROMPT},
+        reply = self._raw_client(one_shot=True).chat([{"role": "system", "content": self._SUGGEST_PROMPT},
                                          {"role": "user", "content": "\n\n".join(turns[-6:])}], [])
         text = str((((reply or {}).get("choices") or [{}])[0].get("message") or {}).get("content") or "")
         text = re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip().splitlines()
@@ -1986,7 +2022,7 @@ class WebSession:
         if not allowed:
             return "the user declined" + (f": {message}" if message else "")
         self._activity("mcp", f"{client.name} used the model", brief[:160], "success")
-        return sample_with(self._raw_client(), params)
+        return sample_with(self._raw_client(one_shot=True), params)
 
     def mcp_elicit(self, client: Any, params: Dict[str, Any]) -> Any:
         """An MCP server asks the user for a few answers: show its form and wait."""
@@ -2682,7 +2718,7 @@ class WebSession:
         changes = gitflow.changes_for_message(self.project_dir, base or "")
         if not changes.strip():
             raise ValueError("there are no changes to describe")
-        reply = self._raw_client().chat([{"role": "system", "content": self._GIT_PROMPTS[kind]},
+        reply = self._raw_client(one_shot=True).chat([{"role": "system", "content": self._GIT_PROMPTS[kind]},
                                          {"role": "user", "content": changes}], [])
         text = str((((reply or {}).get("choices") or [{}])[0].get("message") or {}).get("content") or "")
         text = re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip().strip("`").strip()

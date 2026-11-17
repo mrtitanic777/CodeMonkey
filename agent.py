@@ -131,7 +131,7 @@ RUNAWAY_CHARS = 600
 
 #: Request fields a server may not know. If a request carrying them is refused, it is sent once
 #: more without them, and they are left out from then on.
-OPTIONAL_FIELDS = ("reasoning_effort", "thinking_budget_tokens", "max_tokens")
+OPTIONAL_FIELDS = ("reasoning_effort", "thinking_budget_tokens", "max_tokens", "strata_checkpoint")
 
 #: The most one request may write beyond its thinking, when it has tools to act with. A model that
 #: has stopped acting and is writing its deliberation out as the answer will otherwise go on for

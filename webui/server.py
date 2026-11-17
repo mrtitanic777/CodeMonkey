@@ -669,6 +669,25 @@ class WebHandler(BaseHTTPRequestHandler):
                     return self._error(str(exc), 404)
                 except (ValueError, OSError) as exc:
                     return self._error(str(exc), 400)
+            m = re.fullmatch(r"/api/sessions/([0-9a-f]+)/picture", path)
+            if m:   # a picture in the project, shown in a reply (webui/pictures.py)
+                session = self._session(m.group(1))
+                if session is None:
+                    return
+                try:
+                    data, media = session.picture_file((query.get("path") or [""])[0])
+                except FileNotFoundError as exc:
+                    return self._error(str(exc), 404)
+                except (ValueError, OSError) as exc:
+                    return self._error(str(exc), 400)
+                self.send_response(200)
+                self.send_header("Content-Type", media)
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                self.wfile.write(data)
+                return
             m = re.fullmatch(r"/api/sessions/([0-9a-f]+)/browser-view\.png", path)
             if m:   # what the agent's browser shows now (the Browser pane's Agent view)
                 session = self._session(m.group(1))

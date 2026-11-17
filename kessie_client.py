@@ -213,6 +213,12 @@ class KeSSieClient(ModelClient):
                 f"Malformed KeSSie response: {str(response)[:200]} ({exc})"
             )
         clean_text, tool_calls = parse_kessie_tool_calls(msg.get("content") or "")
+        if msg.get("tool_calls"):
+            # newer KeSSie servers send the calls already parsed, OpenAI's way, with empty text
+            tool_calls = [{"id": c.get("id") or f"call_{uuid.uuid4().hex[:8]}", "type": "function",
+                           "function": {"name": (c.get("function") or {}).get("name", ""),
+                                        "arguments": (c.get("function") or {}).get("arguments") or "{}"}}
+                          for c in msg["tool_calls"]] + (tool_calls or [])
         return {
             "choices": [
                 {
