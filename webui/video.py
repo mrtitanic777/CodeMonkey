@@ -24,6 +24,8 @@ import urllib.parse
 import urllib.request
 from typing import List, Optional, Tuple
 
+from .speech import whisper
+
 MAX_BYTES = 500 * 1024 * 1024
 FOLDER = "videos"
 DEFAULT_FRAMES = 24
@@ -165,22 +167,6 @@ def watch(project_dir: str, path: str, frames_dir: str, start: float = 0, end: f
 MOST_SAID = 12000
 
 
-def speech_dir() -> str:
-    """Where the speech-to-text program and its model live: outside the project and the app, so
-    neither grows by it. CODEMONKEY_SPEECH points somewhere else."""
-    return os.environ.get("CODEMONKEY_SPEECH") or os.path.join(
-        os.environ.get("LOCALAPPDATA") or os.path.expanduser("~/.local/share"), "CodeMonkey", "speech")
-
-
-def whisper() -> Optional[Tuple[str, str]]:
-    """(whisper.cpp's whisper-cli, its model file), or None when speech-to-text is not set up."""
-    base = speech_dir()
-    exe = next((p for p in (os.path.join(base, "bin", "Release", "whisper-cli.exe"), os.path.join(base, "bin", "whisper-cli.exe"),
-                            os.path.join(base, "bin", "whisper-cli")) if os.path.isfile(p)), None) or shutil.which("whisper-cli")
-    models = sorted(glob.glob(os.path.join(base, "ggml-*.bin")))
-    return (exe, models[0]) if exe and models else None
-
-
 def transcribe(video: str, work_dir: str) -> List[Tuple[float, float, str]]:
     """What is said in *video*, as (from, to, text) in seconds. Kept beside the frames by the file's
     size and time, so asking about a part again does not transcribe it all again."""
@@ -200,8 +186,9 @@ def transcribe(video: str, work_dir: str) -> List[Tuple[float, float, str]]:
     _run([ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-i", video, "-vn", "-ac", "1", "-ar", "16000",
           "-c:a", "pcm_s16le", wav], 900)
     try:
-        threads = str(max(2, min(8, (os.cpu_count() or 4) // 2)))
-        _run([tool[0], "-m", tool[1], "-f", wav, "-t", threads, "-np", "-oj", "-of", out], 3600)
+        from .speech import threads
+
+        _run([tool[0], "-m", tool[1], "-f", wav, "-t", threads(), "-np", "-oj", "-of", out], 3600)
         with open(out + ".json", encoding="utf-8", errors="replace") as fh:
             data = json.load(fh)
     finally:

@@ -201,6 +201,13 @@ def is_local(base_url: str) -> bool:
     return urllib.parse.urlsplit(base_url or "").hostname in ("127.0.0.1", "localhost", "::1")
 
 
+#: Added to what the model is sent (not to what the transcript shows) for a message said in a call.
+VOICE_NOTE = (
+    "[Said aloud in a voice call; your answer is read out. Answer the way you would say it: short, plain "
+    "spoken sentences, no lists, tables, headings, code or links unless asked. If you change files or "
+    "run something, say in a sentence what you did. What was heard may have small mistakes in it.]")
+
+
 def tool_group(name: str) -> str:
     if name.startswith("browser_"):
         return "browser"
@@ -1493,6 +1500,10 @@ class WebSession:
         from .effort import LABELS, choose
 
         effort, why = choose(text)
+        if getattr(self, "_voice", False) and effort in ("medium", "high") and not re.search(
+                r"\b(think|carefully|ultrathink)\b", text, re.I):
+            # a call waits for the answer out loud: a little thought, unless asked to think
+            effort, why = "low", "a voice call answers quickly"
         self.bus.emit("turn_effort", {"effort": effort, "label": LABELS[effort], "why": why})
         return effort
 
@@ -1561,7 +1572,7 @@ class WebSession:
                 self._client_id = ""
                 self._run_plan(text)
                 return
-            self._run_message(text, item.get("attachments") or [])
+            self._run_message(text, item.get("attachments") or [], voice=bool(item.get("voice")))
         elif kind == "handoff":
             # A helper's report. It is for the agent, not the user, and it is a report to
             # check, not an instruction to follow.
@@ -1684,7 +1695,7 @@ class WebSession:
 
     # ------------------------------------------------------ messages ---
 
-    def enqueue_message(self, text: str, attachments: List[Dict], client_id: str = "") -> int:
+    def enqueue_message(self, text: str, attachments: List[Dict], client_id: str = "", voice: bool = False) -> int:
         """Queue a message. The same *client_id* twice is one message: a page on a flaky
         connection can send again without the agent hearing it twice. Returns 0 for a repeat."""
         if client_id:
@@ -1694,7 +1705,8 @@ class WebSession:
                     return 0
                 seen.append(client_id)
                 del seen[:-200]
-        self.inbox.put({"kind": "message", "text": text, "attachments": attachments, "client_id": client_id})
+        self.inbox.put({"kind": "message", "text": text, "attachments": attachments, "client_id": client_id,
+                        "voice": voice})
         return self.inbox.qsize()
 
     def enqueue_plan(self, task: str, feedback: Optional[str] = None) -> None:
@@ -2187,8 +2199,10 @@ class WebSession:
         attachments: List[Dict[str, Any]],
         display_as: Optional[str] = None,
         internal: Optional[str] = None,
+        voice: bool = False,
     ) -> None:
         self.status = "working"
+        self._voice = voice and not internal
         self._touch()
         shown = internal or display_as or text
         if self.title == "New session" and shown.strip() and not internal:
@@ -2199,9 +2213,11 @@ class WebSession:
             # Every open page shows the message, not only the one it was typed on. The page
             # that sent it recognises its own by the id and does not show it twice.
             with self._lock:
-                self.bus.emit("user_message", {"text": shown, "client_id": getattr(self, "_client_id", "")})
+                self.bus.emit("user_message", {"text": shown, "client_id": getattr(self, "_client_id", ""),
+                                               "voice": self._voice})
                 # its turn and where the model's history stood: what rewinding to it goes back to
-                self._record({"kind": "user", "text": shown, "turn": turn_id, "h": len(self.history)})
+                self._record({"kind": "user", "text": shown, "turn": turn_id, "h": len(self.history),
+                              **({"voice": True} if self._voice else {})})
             self._client_id = ""
         self.bus.emit(
             "turn_start",
@@ -2243,6 +2259,8 @@ class WebSession:
                 return
             if decided is not None and decided["notes"]:
                 full_text += "\n\n" + "\n".join(f"[hook note] {n}" for n in decided["notes"])
+            if self._voice:
+                full_text += "\n\n" + VOICE_NOTE
         self._turn_steps = 0
         self.loop.cancel_requested = False
         self.changes.begin(turn_id)

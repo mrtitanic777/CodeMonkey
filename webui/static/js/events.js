@@ -274,7 +274,9 @@ function handleEvent(type, d) {
       break;
     case "token":
       if (S.liveStep && S.liveStep.indexOf("Reading the conversation") === 0) S.liveStep = "";
-      onToken(d); break;
+      onToken(d);
+      if (typeof CALL !== "undefined" && CALL.on) callOnToken(d);
+      break;
     case "claims": onClaims(d); break;
     case "artifact": addArtifactCard(d); break;
     case "activity":
@@ -283,7 +285,7 @@ function handleEvent(type, d) {
     case "tool_call": stepStart(d, true); break;
     case "tool_progress": stepProgress(d); break;
     case "tool_result": stepEnd(d); try { noticeLocalUrl(JSON.stringify(d).slice(0, 20000)); } catch (e) {} break;
-    case "permission_request": onPermissionRequest(d); break;
+    case "permission_request": onPermissionRequest(d); if (typeof CALL !== "undefined" && CALL.on) callOnPermission(); break;
     case "elicitation_request": onElicitation(d); break;
     case "turn_changes": addChangesCard(d); if (S.reviewTurn === d.turn) renderReview(); break;
     case "open_rewind": openRewind(); break;
@@ -326,6 +328,7 @@ function handleEvent(type, d) {
       addTaskCard(d);
       break;
     case "turn_end":
+      if (typeof CALL !== "undefined" && CALL.on) callOnTurnEnd();   // a call says the rest of the reply
       if (paneOpen("file-pane") && $("file-pane").classList.contains("treeview")) loadTree();   // what the turn changed
       S.lastSpeed = d.tokens_per_s || null;
       S.lastReuse = d.reused_pct == null ? null : d.reused_pct;
@@ -333,7 +336,7 @@ function handleEvent(type, d) {
       settleThought(S.turn);   // stopped mid-thought: the line stops shimmering
       finishWork(d.elapsed_ms);
       finishReply();
-      if (S.turn && S.turn.reply) speakReply(S.turn.reply._text || (S.turn.reply.querySelector(".md") || {}).innerText || "");
+      if (S.turn && S.turn.reply && !(typeof CALL !== "undefined" && CALL.on)) speakReply(S.turn.reply._text || (S.turn.reply.querySelector(".md") || {}).innerText || "");
       if (S.snap) notify("CodeMonkey finished", S.snap.title);
       var ended = S.turn;
       S.turn = null;

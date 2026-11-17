@@ -160,9 +160,11 @@ class WebHandler(BaseHTTPRequestHandler):
             return cached
         length = int(self.headers.get("Content-Length", 0) or 0)
         data: Dict[str, Any] = {}
+        self._raw = b""   # the body as it came, for the one request that is not JSON (a call's audio)
         if length:
+            self._raw = self.rfile.read(length)
             try:
-                parsed = json.loads(self.rfile.read(length) or b"{}")
+                parsed = json.loads(self._raw or b"{}")
                 if isinstance(parsed, dict):
                     data = parsed
             except (json.JSONDecodeError, ValueError):
@@ -688,6 +690,10 @@ class WebHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(data)
                 return
+            if path == "/api/speech":   # what a call can do here: hear (whisper.cpp), and with which voice
+                from . import speech
+
+                return self._json(speech.status())
             m = re.fullmatch(r"/api/sessions/([0-9a-f]+)/browser-view\.png", path)
             if m:   # what the agent's browser shows now (the Browser pane's Agent view)
                 session = self._session(m.group(1))
@@ -1217,11 +1223,46 @@ class WebHandler(BaseHTTPRequestHandler):
                 attachments = body.get("attachments") or []
                 if not text.strip() and not attachments:
                     return self._error("empty message", 400)
-                position = session.enqueue_message(text, attachments, str(body.get("client_id") or ""))
+                position = session.enqueue_message(text, attachments, str(body.get("client_id") or ""),
+                                                   voice=bool(body.get("voice")))
                 if position == 0:
                     return self._json({"queued": True, "position": 1, "duplicate": True})
                 self.app.refresh_index_entry(session)
                 return self._json({"queued": True, "position": position})
+            m = re.fullmatch(r"/api/sessions/([0-9a-f]+)/hear", path)
+            if m:   # a voice call: what was just said, as text (webui/speech.py)
+                session = self._session(m.group(1))
+                if session is None:
+                    return
+                from . import speech
+
+                size = int(self.headers.get("Content-Length") or 0)
+                if size <= 0 or size > speech.MOST_HEARD_BYTES:
+                    return self._error("no audio, or too much at once", 400)
+                audio = getattr(self, "_raw", b"")   # read already, with every request's body (_read_json)
+                try:
+                    return self._json({"text": speech.hear(audio)})
+                except RuntimeError as exc:
+                    return self._error(str(exc), 503)
+                except (ValueError, OSError, subprocess.SubprocessError) as exc:
+                    return self._error(str(exc), 400)
+            if path == "/api/speak":   # a sentence of a reply, said by the voice set up (Piper)
+                from . import speech
+
+                text = str(self._read_json().get("text") or "")
+                try:
+                    data = speech.speak(text)
+                except RuntimeError as exc:
+                    return self._error(str(exc), 404)   # the page speaks with the system's voices instead
+                except (OSError, subprocess.SubprocessError) as exc:
+                    return self._error(str(exc), 500)
+                self.send_response(200)
+                self.send_header("Content-Type", "audio/wav")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(data)
+                return
             m = re.fullmatch(r"/api/sessions/([0-9a-f]+)/cancel", path)
             if m:
                 session = self._session(m.group(1))
