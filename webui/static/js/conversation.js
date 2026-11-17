@@ -125,9 +125,17 @@ function stepSummary(name, args) {
 /* A step as one plain sentence, the way Claude Code lists tool calls. */
 /* A step while it runs, said the way Claude Code says it: "Running web UI test files", "Reading
    app.js". A command's description is its words; without one it is just "Running a command". */
+var IRREGULAR = { ran: "Running", built: "Building", found: "Finding", wrote: "Writing", made: "Making", got: "Getting",
+  took: "Taking", saw: "Seeing", did: "Doing", went: "Going", gave: "Giving", began: "Beginning", kept: "Keeping",
+  left: "Leaving", sent: "Sending", set: "Setting", put: "Putting", spent: "Spending", brought: "Bringing",
+  thought: "Thinking", fetched: "Fetching", rebuilt: "Rebuilding", rewrote: "Rewriting", reran: "Rerunning" };
 function gerund(verb) {
   var v = verb.toLowerCase();
+  if (IRREGULAR[v]) return IRREGULAR[v];
   if (/ing$/.test(v) && v.length > 4) return verb;
+  // a past tense ("Listed", "Created", "Stopped"): without its d it is the verb with an e the rule
+  // below drops ("Liste" -> "Listing", "Create" -> "Creating", "Stoppe" -> "Stopping"); not "need"
+  if (/[^e]ed$/.test(v) && v.length > 3) { verb = verb.slice(0, -1); v = v.slice(0, -1); }
   if (/ie$/.test(v)) return verb.slice(0, -2) + "ying";
   if (/[^aeiou]e$/.test(v) && v !== "be") return verb.slice(0, -1) + "ing";
   if (/^(run|get|set|put|stop|cut|let|hit|sit|plan|shut|ship|skip|drop|grep|chop|wrap|tap|map|zip|pin|log|tag|dig|swap)$/.test(v)) return verb + verb.slice(-1) + "ing";
