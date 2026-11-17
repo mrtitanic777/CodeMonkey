@@ -473,6 +473,35 @@ PAGES.general = function (pane) {
         })));
     }
   }
+  // the voice a call speaks with (webui/speech.py): Kokoro's voices when it is set up
+  var callRow = row("srow", "Call voice", "The voice that talks in a voice call (the phone button by the message box)");
+  pane.appendChild(callRow);
+  fetch("/api/speech").then(function (r) { return r.json(); }).then(function (sp) {
+    var sub = callRow.querySelector("i");
+    if (sp.voice !== "kokoro" || !(sp.voices || []).length) {
+      sub.textContent = sp.voice === "system" ? "This computer's own voices, as for reading aloud. A lifelike voice (Kokoro) can be set up for calls."
+        : "The voice set up for calls (" + sp.voice + ").";
+      return;
+    }
+    var where = { a: "American", b: "British" };
+    var named = sp.voices.filter(function (v) { return where[v.charAt(0)]; }).map(function (v) {
+      var name = v.split("_").slice(1).join(" ");
+      return [v, name.charAt(0).toUpperCase() + name.slice(1) + " · " + where[v.charAt(0)] + (v.charAt(1) === "m" ? " man" : " woman")];
+    });
+    sub.textContent = "Lifelike voices made on this computer (Kokoro). Heart is the default.";
+    callRow.appendChild(selectControl(named, st.call_voice || sp.chosen, function (v) { saveSetting({ call_voice: v }); }));
+    callRow.appendChild(button("Try it", function () {
+      var pick = callRow.querySelector("select").value;
+      fetch("/api/speak", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: "Hi! This is how I'll sound when we talk. Ask me anything.", voice: pick }) })
+        .then(function (r) { if (!r.ok) throw new Error("The voice could not speak."); return r.blob(); })
+        .then(function (b) { var a = new Audio(URL.createObjectURL(b)); a.onended = function () { URL.revokeObjectURL(a.src); }; return a.play(); })
+        .catch(toastError);
+    }));
+    pane.insertBefore(row("srow", "Call speed", "How fast the call voice talks",
+      selectControl([["0.9", "A little slower"], ["1", "Normal"], ["1.1", "A little faster"], ["1.25", "Faster"]],
+        String(st.call_speed || 1), function (v) { saveSetting({ call_speed: parseFloat(v) }); })), callRow.nextSibling);
+  }).catch(function () {});
   pane.appendChild(h("h3", "", "Status line"));
   pane.appendChild(h("p", "pgsub", "A quiet row under the message box. Pick what it shows; your own command can add one more " +
     "piece (it gets the session as JSON on its input and the first line it prints is shown)."));

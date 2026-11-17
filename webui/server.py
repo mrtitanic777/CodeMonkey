@@ -693,7 +693,9 @@ class WebHandler(BaseHTTPRequestHandler):
             if path == "/api/speech":   # what a call can do here: hear (whisper.cpp), and with which voice
                 from . import speech
 
-                return self._json(speech.status())
+                speech.warm()   # a call is starting: have the voice ready for its first sentence
+                return self._json({**speech.status(), "voices": speech.voices(),
+                                   "chosen": self.app.settings.get("call_voice") or speech.DEFAULT_VOICE})
             m = re.fullmatch(r"/api/sessions/([0-9a-f]+)/browser-view\.png", path)
             if m:   # what the agent's browser shows now (the Browser pane's Agent view)
                 session = self._session(m.group(1))
@@ -1249,9 +1251,11 @@ class WebHandler(BaseHTTPRequestHandler):
             if path == "/api/speak":   # a sentence of a reply, said by the voice set up (Piper)
                 from . import speech
 
-                text = str(self._read_json().get("text") or "")
+                body = self._read_json()
+                text = str(body.get("text") or "")
                 try:
-                    data = speech.speak(text)
+                    data = speech.speak(text, str(body.get("voice") or self.app.settings.get("call_voice") or ""),
+                                        float(self.app.settings.get("call_speed") or 1.0))
                 except RuntimeError as exc:
                     return self._error(str(exc), 404)   # the page speaks with the system's voices instead
                 except (OSError, subprocess.SubprocessError) as exc:

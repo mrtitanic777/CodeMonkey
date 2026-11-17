@@ -95,7 +95,7 @@ def test_the_hearing_endpoint():
         try:
             s = app.create_session(tmp)
             with urllib.request.urlopen(f"{base}/api/speech") as r:
-                assert set(json.load(r)) == {"hear", "voice"}
+                assert {"hear", "voice", "voices", "chosen"} <= set(json.load(r))
             if speech.whisper() is None:
                 return
             wav = _said(tmp, "Hello there.")
@@ -112,5 +112,32 @@ def test_the_hearing_endpoint():
             except urllib.error.HTTPError as exc:
                 assert exc.code == 400
             s.close()
+        finally:
+            server.shutdown()
+
+
+def test_the_call_voice_speaks():
+    if speech.kokoro_files() is None:
+        pytest.skip("Kokoro is not set up")
+    import wave
+    import io
+
+    data = speech.speak("Hello, this is a test.", "am_michael", 1.1)
+    with wave.open(io.BytesIO(data)) as w:
+        assert w.getframerate() == 24000 and w.getnframes() / w.getframerate() > 0.8
+    assert speech.speak("Unknown voice falls back.", "zz_nobody")[:4] == b"RIFF"
+    assert "af_heart" in speech.voices() and speech.status()["voice"] == "kokoro"
+
+
+def test_call_voice_settings_are_kept_in_range():
+    from test_webui import start_server
+
+    with tempfile.TemporaryDirectory() as tmp:
+        app, server, base = start_server(tmp)
+        try:
+            app.update_settings({"call_voice": "bf_emma", "call_speed": 9})
+            assert app.settings["call_voice"] == "bf_emma" and app.settings["call_speed"] == 2.0
+            app.update_settings({"call_speed": "fast"})
+            assert app.settings["call_speed"] == 1.0
         finally:
             server.shutdown()

@@ -3051,6 +3051,8 @@ class WebApp:
         "guard",
         "risky_check",
         "lean_local",
+        "call_voice",
+        "call_speed",
         "claim_labels",
         "code_gate",
         "gate_tests",
@@ -3100,6 +3102,9 @@ class WebApp:
             "risky_check": "on",
             # a model on this computer is offered fewer tools up front (LEAN_GROUPS), so it reads less
             "lean_local": True,
+            # a voice call's voice (webui/speech.py; "" is the default one) and how fast it talks
+            "call_voice": "",
+            "call_speed": 1.0,
             "claim_labels": True,
             # off | check (refuse what cannot be right; report broken tests) | strict (and undo the change)
             "code_gate": "check",
@@ -3160,6 +3165,11 @@ class WebApp:
         if settings.get("risky_check") not in ("on", "off"):
             settings["risky_check"] = "on"
         settings["lean_local"] = bool(settings.get("lean_local", True))
+        settings["call_voice"] = str(settings.get("call_voice") or "")[:40]
+        try:
+            settings["call_speed"] = max(0.5, min(2.0, float(settings.get("call_speed") or 1.0)))
+        except (TypeError, ValueError):
+            settings["call_speed"] = 1.0
         if settings.get("permission_mode") not in PERMISSION_MODES:
             settings["permission_mode"] = "ask"
         if not isinstance(settings.get("always_commands"), list):
