@@ -14,6 +14,7 @@ import queue
 import re
 import subprocess
 import sys
+import threading
 import traceback
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -1136,6 +1137,19 @@ class WebHandler(BaseHTTPRequestHandler):
                     return self._error(str(exc), 400)
                 self.app.bus.emit("settings", {})
                 return self._json(result)
+            m = re.fullmatch(r"/api/providers/([^/]+)/start", path)
+            if m:   # the command that starts this server when CodeMonkey opens
+                if self._remote():
+                    return self._error("A start command can only be set on this computer", 403)
+                body = self._read_json()
+                try:
+                    result = self.app.providers.set_start(urllib.parse.unquote(m.group(1)), body.get("command", ""))
+                except KeyError:
+                    return self._error("only servers added in Settings can start with CodeMonkey", 404)
+                except ValueError as exc:
+                    return self._error(str(exc), 400)
+                self.app.bus.emit("settings", {})
+                return self._json(result)
             m = re.fullmatch(r"/api/providers/([^/]+)/test", path)
             if m:
                 try:
@@ -1689,6 +1703,7 @@ def serve(app, host: str = "127.0.0.1", port: int = 8080) -> ThreadingHTTPServer
     app.learner.start()
     app.codeknow.start()   # the C/C++ knowledge base: built or refreshed in the background
     app.updates.start()
+    threading.Thread(target=app.autostart.start_all, daemon=True, name="autostart").start()
     print(f"Web UI: http://{host}:{server.server_port}")
     app.phone.announce()
     print("Press Ctrl-C to stop.")

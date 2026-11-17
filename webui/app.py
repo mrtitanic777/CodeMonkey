@@ -2872,6 +2872,9 @@ class WebApp:
         from .updates import Updates
 
         self.modelsetup = ModelSetup(self)   # Set up a model: what is here, what fits, the steps
+        from .autostart import Autostart
+
+        self.autostart = Autostart(self)   # model servers that start when CodeMonkey opens
         self.updates = Updates(self, _APP_ROOT)   # is there a newer CodeMonkey (at the link the builder set)
         # One database for sessions, the activity ledger and memory claims.
         self.store = Store(os.path.join(self.webui_dir, "codemonkey.db"))
@@ -4273,6 +4276,8 @@ class WebApp:
                 "models": entry.get("models", []),
                 "custom": name in self.providers.custom,
                 "key": self.providers.key_status(name),
+                "start_command": entry.get("start_command", ""),
+                "starting": self.autostart.status().get(name, {}).get("state", ""),
             }
         return {
             "providers": providers,

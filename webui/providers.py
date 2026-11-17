@@ -52,6 +52,8 @@ class Providers:
             "max_tokens": max(0, min(200000, int(entry.get("max_tokens") or 0))),
             # the model's window in tokens; 0: reported by a local server, or the app's default
             "context_window": max(0, min(1_000_000_000, int(entry.get("context_window") or 0))),
+            # run when CodeMonkey opens, if the server is not answering yet (webui/autostart.py)
+            "start_command": str(entry.get("start_command") or "").strip()[:1000],
         }
 
     def _save(self) -> None:
@@ -106,6 +108,9 @@ class Providers:
         entry = self._clean({"base_url": base_url, "client": client, "models": list(models or []), "vision": vision})
         with self._lock:
             before = self.custom.get(name)
+            for kept in ("start_command", "max_tokens", "context_window"):   # set elsewhere; an edit keeps them
+                if before and before.get(kept) and not entry.get(kept):
+                    entry[kept] = before[kept]
             if before and before.get("base_url") != entry["base_url"]:
                 keystore.delete(name)   # a key goes only where it was entered for
             self.custom[name] = entry
@@ -114,6 +119,19 @@ class Providers:
         if key:
             self.set_key(name, key)
         return {"name": name, **entry, "key": self.key_status(name)}
+
+    def set_start(self, name: str, command: str) -> Dict[str, Any]:
+        """The command that starts this server when CodeMonkey opens ("" for none). Servers added here only."""
+        if name not in self.custom:
+            raise KeyError(name)
+        command = str(command or "").strip()
+        if "\n" in command or "\r" in command or len(command) > 1000:
+            raise ValueError("One command on one line, up to 1000 characters.")
+        with self._lock:
+            self.custom[name]["start_command"] = command
+            self.app.config.providers[name]["start_command"] = command
+            self._save()
+        return {"name": name, "start_command": command}
 
     def remove(self, name: str) -> bool:
         with self._lock:

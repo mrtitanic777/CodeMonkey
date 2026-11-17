@@ -581,6 +581,7 @@ PAGES.models = function (pane) {
     states.push(function (live) {
       if (needsKey(p)) return;
       var found = live.filter(function (g) { return g.provider === name; })[0];
+      if (!found && p.starting === "starting") { tag.className = "tag off"; tag.textContent = "Starting…"; tag.title = "Started when CodeMonkey opened; it answers once its model has loaded"; return; }
       if (!found) { tag.className = "tag off"; tag.textContent = "Off"; tag.title = "Not running: nothing answered at " + (p.base_url || ""); return; }
       tag.className = "tag ok"; tag.textContent = "Running \u00b7 " + found.models.length + (found.models.length === 1 ? " model" : " models");
       tag.title = "Show its models";
@@ -597,9 +598,23 @@ PAGES.models = function (pane) {
       });
       tag.onclick = function () { sub.classList.toggle("hidden"); };
     });
+    // a server added here can start with CodeMonkey: the command that starts it (webui/autostart.py)
+    var startBtn = p.custom ? button(p.start_command ? "Starts with CodeMonkey" : "Start with CodeMonkey", function () {
+      askLongText("Start " + providerName(name) + " with CodeMonkey",
+        "The command that starts it, as you would type it in a terminal. When CodeMonkey opens and " + providerName(name) +
+        " isn't running yet, CodeMonkey runs this in the background; it keeps running after CodeMonkey closes. Leave it empty to stop.",
+        p.start_command || "", function (command) {
+          api("POST", "/api/providers/" + encodeURIComponent(name) + "/start", { command: command }).then(function () {
+            toast(command.trim() ? providerName(name) + " will start with CodeMonkey" : providerName(name) + " won't start with CodeMonkey");
+            return reloadConfig("models");
+          }).catch(toastError);
+        });
+    }) : null;
+    if (startBtn && p.start_command) startBtn.title = p.start_command;
     pane.appendChild(row("mrow", providerName(name),
-      (isDefault ? "Default \u00b7 " : "") + (p.base_url || "address from the top of config.yaml") + " \u00b7 " + keyText(p) + (p.vision ? " \u00b7 sees images" : ""),
-      needsKey(p) ? null : tag, buttonRow(keyBtn, removeBtn)));   // "Add key" already says it
+      (isDefault ? "Default \u00b7 " : "") + (p.base_url || "address from the top of config.yaml") + " \u00b7 " + keyText(p) + (p.vision ? " \u00b7 sees images" : "") +
+        (p.start_command ? " \u00b7 starts with CodeMonkey" : ""),
+      needsKey(p) ? null : tag, buttonRow(startBtn, keyBtn, removeBtn)));   // "Add key" already says it
     pane.appendChild(keys);
     pane.appendChild(sub);
   });
