@@ -1837,3 +1837,19 @@ html.noglass .welcome, html.noglass .nomodel { background: var(--panel); }
   border-radius: 10px; border: 1px solid var(--line); cursor: zoom-in; object-fit: contain;
   background: rgba(var(--tint), .03); }
 .replypic.big { max-width: 100%; max-height: none; cursor: zoom-out; }
+
+/* 21. Video cards: a YouTube or Vimeo video in a reply. Nothing loads from the site until it is clicked. */
+.vcard { display: flex; align-items: center; gap: 14px; width: min(100%, 520px); margin: 6px 0 10px; padding: 14px 16px;
+  border: 1px solid var(--line); border-radius: 12px; background: rgba(var(--tint), .04); cursor: pointer;
+  backdrop-filter: blur(8px); transition: background .15s, border-color .15s; }
+.vcard:hover, .vcard:focus-visible { background: rgba(var(--tint), .08); border-color: rgba(var(--tint), .2); outline: none; }
+.vplay { flex: none; width: 44px; height: 44px; border-radius: 50%; background: #fff; position: relative; }
+.vplay::after { content: ""; position: absolute; left: 17px; top: 13px; border-left: 14px solid #111;
+  border-top: 9px solid transparent; border-bottom: 9px solid transparent; }
+.vtext { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.vtitle { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vsite { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.vopen { flex: none; font-size: 12.5px; color: var(--muted); text-decoration: none; padding: 4px 8px; border-radius: 6px; }
+.vopen:hover { color: var(--text); background: rgba(var(--tint), .08); }
+.vframe { display: block; width: min(100%, 720px); aspect-ratio: 16 / 9; height: auto; margin: 6px 0 10px; border: 0;
+  border-radius: 12px; background: #000; }

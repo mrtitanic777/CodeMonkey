@@ -146,7 +146,8 @@ def picture_tool(project_dir) -> Tool:
             "Save a picture from the web into the project so you can show it in your reply. Give the "
             "picture's address, or a page's address to save that page's main picture (the other pictures "
             "on the page are listed). Then show it with ![description](saved/path.jpg) on its own line. "
-            "Replies show only saved pictures, never web addresses."
+            "Replies show only saved pictures, never web addresses. A YouTube or Vimeo video needs no "
+            "saving: put its link on its own line and it shows as a card the user can click to play."
         ),
         parameters={
             "type": "object",

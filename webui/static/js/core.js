@@ -137,8 +137,58 @@ function highlight(code) {
 /* ![description](path): a picture saved in the project, shown in the reply (the server checks it is a
    picture inside the project). A web address is never loaded: a picture's address can carry text out
    to any server, so it stays a link, and the model saves the picture first (picture_save). */
+/* A video on YouTube or Vimeo: { site, id, embed } from its address, or null. Only these sites, and
+   only an id of the shape they use, so the player address is always one this code built. */
+function videoOf(url) {
+  var u = String(url || "").replace(/&amp;/g, "&"), m;
+  m = u.match(/^https?:\/\/(?:www\.|m\.|music\.)?youtube(?:-nocookie)?\.com\/(?:watch\?(?:[^#]*&)?v=|shorts\/|embed\/|live\/)([A-Za-z0-9_-]{11})(?:[?&#][^\s]*)?$/) ||
+      u.match(/^https?:\/\/youtu\.be\/([A-Za-z0-9_-]{11})(?:[?&#][^\s]*)?$/);
+  if (m) {
+    var t = u.match(/[?&#]t=(\d+)s?/);
+    return { site: "YouTube", id: m[1], embed: "https://www.youtube-nocookie.com/embed/" + m[1] + "?autoplay=1&rel=0" +
+      (t ? "&start=" + t[1] : "") };
+  }
+  m = u.match(/^https?:\/\/(?:www\.)?vimeo\.com\/(\d{4,12})(?:[?#][^\s]*)?$/) ||
+      u.match(/^https?:\/\/player\.vimeo\.com\/video\/(\d{4,12})(?:[?#][^\s]*)?$/);
+  if (m) return { site: "Vimeo", id: m[1], embed: "https://player.vimeo.com/video/" + m[1] + "?autoplay=1&dnt=1" };
+  return null;
+}
+
+/* A click-to-play card: nothing is loaded from the video site until it is clicked. */
+function videoCardHtml(url, title) {
+  var v = videoOf(url);
+  if (!v) return "";
+  var name = title && title !== url ? title : v.site + " video";
+  return '<span class="vcard" role="button" tabindex="0" data-embed="' + esc(v.embed) + '" data-url="' + url +
+    '" title="Play here (loads ' + v.site + ')"><span class="vplay" aria-hidden="true"></span><span class="vtext">' +
+    '<span class="vtitle">' + name + '</span><span class="vsite">' + v.site + ' · click to play here</span></span>' +
+    '<a class="vopen" href="' + url + '" target="_blank" rel="noopener noreferrer" title="Open on ' + v.site + '">open</a></span>';
+}
+
+function playCard(card) {
+  var frame = document.createElement("iframe");
+  frame.className = "vframe";
+  frame.src = card.getAttribute("data-embed");
+  frame.setAttribute("allow", "autoplay; encrypted-media; picture-in-picture; fullscreen");
+  frame.setAttribute("allowfullscreen", "");
+  frame.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+  frame.title = (card.querySelector(".vtitle") || {}).textContent || "video";
+  card.replaceWith(frame);
+}
+
+document.addEventListener("click", function (e) {
+  var card = e.target && e.target.closest ? e.target.closest(".vcard") : null;
+  if (card && !e.target.closest(".vopen")) { e.preventDefault(); playCard(card); }
+});
+document.addEventListener("keydown", function (e) {
+  if ((e.key === "Enter" || e.key === " ") && e.target && e.target.classList && e.target.classList.contains("vcard")) {
+    e.preventDefault(); playCard(e.target);
+  }
+});
+
 function pictureHtml(m, alt, src) {
   var raw = src.replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+  if (videoOf(raw)) return videoCardHtml(src, alt);
   if (/^https?:\/\//i.test(raw)) {
     return '<a href="' + src + '" target="_blank" rel="noopener noreferrer">picture: ' + (alt || "link") + "</a>";
   }
@@ -160,7 +210,14 @@ function renderInline(s) {
     return "@@CODE" + (parts.length - 1) + "@@";
   });
   out = out.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, pictureHtml);
-  out = out.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  out = out.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, function (m, text, url) {
+    return videoCardHtml(url, text) || '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + text + "</a>";
+  });
+  // a video's bare address (models often write one) is a card too
+  out = out.replace(/(^|[\s(])(https?:\/\/(?:www\.|m\.)?(?:youtube\.com|youtu\.be|vimeo\.com)\/[^\s<)]+)/g, function (m, pre, url) {
+    var card = videoCardHtml(url, "");
+    return card ? pre + card : m;
+  });
   out = out.replace(/\[\[([^\]|]{1,40})\|([^\]]{1,240})\]\]/g, function (m, w, d) { return termHtml(w, d); });   // Beginner mode's words
   out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   out = out.replace(/(^|[\s(])\*([^*\s][^*]*)\*(?=[\s).,;:!?]|$)/g, "$1<em>$2</em>");
