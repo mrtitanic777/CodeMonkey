@@ -1822,3 +1822,11 @@ html.noglass .welcome, html.noglass .nomodel { background: var(--panel); }
 .termout:empty::before { content: "Run anything in this folder: a build, the tests, your game.\A If a command fails, a card explains why in plain words and can fix it for you.";
   white-space: pre-line; display: block; color: var(--faint); font: 13px/1.7 var(--ui); padding: 4px 2px; }
 [data-light] .composer > .send:not(.stop) { border: 0; }
+
+/* 19. A reply cut off by a crash or a forced close (conversation.js addInterrupted) */
+.interrupted { margin: 6px 0 18px; padding: 12px 14px; border-radius: var(--r, 14px); border: 1px solid rgba(217, 179, 108, .35);
+  background: rgba(217, 179, 108, .06); }
+.interrupted b { font-weight: 600; color: var(--warn); }
+.interrupted p { margin: 3px 0 0; color: var(--muted); font-size: 13.5px; }
+.interrupted .btnrow { margin-top: 10px; }
+.interrupted .btnrow .btn { height: 30px; }

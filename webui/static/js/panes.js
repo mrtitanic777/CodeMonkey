@@ -69,6 +69,7 @@ function closePanes(except) {
     else $(id).classList.add("hidden");
   });
   if (except !== "term-pane") stopTermPoll();
+  keepPane(except);   // kept for the next start (keep.js): the terminal or the files, or nothing
 }
 function paneOpen(id) { return !!$(id) && !$(id).classList.contains("hidden"); }
 function showPane(id) { closePanes(id); $(id).classList.remove("hidden"); applyPaneWidth(id); }

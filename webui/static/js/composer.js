@@ -66,7 +66,7 @@ function sendMessage() {
   rememberSent(text);
   var atts = S.attachments.slice();
   S.attachments = []; renderAttachments();
-  input.value = ""; autosize(); closePalette();
+  input.value = ""; autosize(); closePalette(); clearDraft();
   var shown = text + (atts.length ? "\n\n*" + atts.map(function (a) { return a.filename; }).join(", ") + " attached*" : "");
   var payload = { text: text, attachments: atts, client_id: "" };
   function deliver(id, triesLeft) {

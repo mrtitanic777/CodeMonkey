@@ -3432,6 +3432,25 @@ class WebApp:
                     session.transcript = shown
         except (OSError, json.JSONDecodeError, KeyError):
             pass
+        # The store gets every record as it happens; transcript.json only when a reply ends. After a
+        # crash or a forced close mid-reply the store has the rest: your message and the steps taken.
+        try:
+            logged = self.store.items(session_id, limit=5000)
+        except Exception:  # noqa: BLE001 - the file is still there
+            logged = []
+        if len(logged) > len(session.transcript):
+            with session._lock:
+                session.transcript = logged
+        # a reply that never finished (the app was closed or crashed while it worked) is said so,
+        # once, with a way to carry on (the page's Continue)
+        last = session.transcript[-1] if session.transcript else {}
+        if last.get("kind") in ("user", "tool", "thinking") or (last.get("kind") == "assistant" and last.get("interim")):
+            asked = next((e.get("text", "") for e in reversed(session.transcript) if e.get("kind") == "user"), "")
+            note = {"kind": "interrupted", "text": str(asked)[:20000]}
+            with session._lock:
+                session.transcript.append(note)
+            if self.store.last_seq(session_id):   # an empty log is seeded with all of it just below
+                self.store.append_item(session_id, note)
         self.store.replace_items(session_id, session.transcript)
         session._save_transcript()
         try:

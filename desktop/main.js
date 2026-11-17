@@ -215,13 +215,38 @@ function startServer(port) {
       server = null;
       if (!quitting) {
         reject(new Error(`The server stopped (exit code ${code}).`));
-        if (win && serverUrl) {
-          dialog.showErrorBox("CodeMonkey stopped", `The server stopped (exit code ${code}).\n\n${serverLog.slice(-2000)}`);
-          app.quit();
-        }
+        if (win && serverUrl) restartServer(code);   // it was running: start it again, the page comes back as it was
       }
     });
   });
+}
+
+/* The server stopped while the window was open (it crashed, or was ended from outside): start it again
+   on the same address and reload the page, which reopens the session, draft and panes it had. Three
+   times in two minutes is a real problem, said as before. */
+let restarts = [];
+async function restartServer(code) {
+  const now = Date.now();
+  restarts = restarts.filter((t) => now - t < 120000);
+  if (restarts.length >= 3) {
+    dialog.showErrorBox("CodeMonkey stopped", `The server stopped (exit code ${code}) and would not stay running.\n\n${serverLog.slice(-2000)}`);
+    quitting = true;
+    app.quit();
+    return;
+  }
+  restarts.push(now);
+  const port = Number(new URL(serverUrl).port);
+  try {
+    const url = await startServer(port);
+    serverUrl = url;
+    if (win) win.loadURL(url);
+  } catch (err) {
+    if (!quitting && !server) {
+      dialog.showErrorBox("CodeMonkey stopped", `The server stopped and could not start again: ${err.message}\n\n${serverLog.slice(-2000)}`);
+      quitting = true;
+      app.quit();
+    }
+  }
 }
 
 function stopServer() {
@@ -238,10 +263,37 @@ function stopServer() {
   }
 }
 
+/* The window's size and place, kept for the next start (and after a crash). */
+const WINDOW_FILE = () => path.join(app.getPath("userData"), "window.json");
+function savedBounds() {
+  try {
+    const b = JSON.parse(fs.readFileSync(WINDOW_FILE(), "utf8"));
+    const { screen } = require("electron");
+    // only where a screen still is (a monitor may have been unplugged)
+    const seen = b.width && screen.getAllDisplays().some((d) => {
+      const a = d.workArea;
+      return b.x < a.x + a.width - 100 && b.x + b.width > a.x + 100 && b.y >= a.y - 10 && b.y < a.y + a.height - 100;
+    });
+    return seen && b.width >= 720 && b.height >= 480 ? b : { maximized: !!b.maximized };
+  } catch (_) {
+    return {};
+  }
+}
+function keepBounds() {
+  if (!win || win.isMinimized()) return;
+  try {
+    // maximized: keep the size it comes back to, and that it was maximized
+    const b = { ...win.getNormalBounds(), maximized: win.isMaximized() };
+    fs.writeFileSync(WINDOW_FILE(), JSON.stringify(b));
+  } catch (_) {}
+}
+
 function createWindow() {
+  const saved = savedBounds();
   win = new BrowserWindow({
-    width: 1400,
-    height: 900,
+    width: saved.width || 1400,
+    height: saved.height || 900,
+    ...(saved.x !== undefined ? { x: saved.x, y: saved.y } : {}),
     minWidth: 720,
     minHeight: 480,
     title: "CodeMonkey",
@@ -253,7 +305,18 @@ function createWindow() {
       preload: path.join(__dirname, "preload.js") },
   });
   win.removeMenu();
-  win.once("ready-to-show", () => win.show());
+  win.once("ready-to-show", () => { if (saved.maximized) win.maximize(); win.show(); });
+  let boundsTimer = null;
+  const keepSoon = () => { clearTimeout(boundsTimer); boundsTimer = setTimeout(keepBounds, 500); };
+  win.on("resize", keepSoon);
+  win.on("move", keepSoon);
+  win.on("maximize", keepBounds);
+  win.on("unmaximize", keepBounds);
+  win.on("close", keepBounds);
+  // the page itself crashed: load it again (it reopens what was open)
+  win.webContents.on("render-process-gone", (_e, details) => {
+    if (details.reason !== "clean-exit" && win && serverUrl) setTimeout(() => win && win.loadURL(serverUrl), 500);
+  });
 
   // Pages on the server stay in the window; anything else opens in the browser.
   const isLocal = (target) => serverUrl !== null && target.startsWith(serverUrl);

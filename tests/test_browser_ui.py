@@ -249,3 +249,47 @@ def test_activity_closed_by_another_pane_stays_closed():
         page.evaluate("newSession()")
         page.wait_for_timeout(300)
         assert page.evaluate("document.getElementById('inspector').classList.contains('hidden')")
+
+
+def test_the_page_comes_back_as_it_was_after_a_restart():
+    # what was open, what was typed but not sent, and the pane beside the chat (keep.js)
+    with page_on_server(script=[text_msg("hello")]) as (page, base, app, tmp, errors, sid):
+        page.evaluate(f"openSession('{sid}')")
+        page.wait_for_function(f"S.snap && S.snap.id === '{sid}'")
+        page.fill("#input", "half a thought I had not sent")
+        page.evaluate("toggleTerm()")
+        page.wait_for_timeout(600)   # the draft is kept a moment after typing stops
+        session = app.get_session(sid)   # a session with a conversation (an empty one is tidied away)
+        session._record({"kind": "user", "text": "hi", "turn": "t1"})
+        session._record({"kind": "assistant", "text": "hello"})
+        session._save_transcript()
+        app.refresh_index_entry(session)
+        app.sessions.clear()   # the server forgets its open sessions, as after a crash
+        page.goto(base + "/", wait_until="load")
+        page.wait_for_function("typeof S !== 'undefined' && S.snap && S.snap.id", timeout=15000)
+        assert page.evaluate("S.current") == sid
+        assert page.input_value("#input") == "half a thought I had not sent"
+        page.wait_for_function("paneOpen('term-pane')", timeout=5000)
+        assert not errors, errors
+
+
+def test_a_reply_cut_off_by_a_crash_says_so_and_can_carry_on():
+    with page_on_server() as (page, base, app, tmp, errors, sid):
+        session = app.create_session(tmp)
+        session._record({"kind": "user", "text": "Make the game faster", "turn": "t1"})
+        session._record({"kind": "tool", "name": "read", "args": {"path": "game.py"}, "result": "print(1)"})
+        app.refresh_index_entry(session)
+        sid = session.id
+        app.sessions.pop(sid)   # the server stopped mid-reply
+        page.evaluate(f"S.list = [{{ id: '{sid}', title: 'x' }}]; openSession('{sid}')")
+        page.wait_for_selector(".interrupted .btn.primary", timeout=15000)
+        text = page.inner_text(".interrupted")
+        assert "cut off" in text and "Continue" in text, text
+        reopened = app.get_session(sid)
+        assert reopened.transcript[-1]["kind"] == "interrupted" and reopened.transcript[-1]["text"] == "Make the game faster"
+        assert any(e.get("kind") == "tool" for e in reopened.transcript), "the steps taken are kept"
+        # opened again later: said once, not twice
+        app.sessions.pop(sid)
+        again = app.reopen_session(sid)
+        assert [e["kind"] for e in again.transcript].count("interrupted") == 1
+        assert not errors, errors

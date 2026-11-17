@@ -405,6 +405,7 @@ function wire() {
     }
   });
   input.addEventListener("input", function () { autosize(); updatePalette(); });
+  startKeeping();   // drafts and scroll kept as they change (keep.js)
   input.addEventListener("click", updatePalette);
   input.addEventListener("blur", function () { setTimeout(closePalette, 120); });
 
@@ -625,6 +626,7 @@ function init() {
         openSession(HASH.session);
         if (HASH.pane) waitForSession(HASH.session, function () { openPoppedPane(HASH.pane); });
       } else if (live) openSession(live.id);
+      else if (lastSession()) openSession(lastSession());   // after a restart or a crash: where you were
       else if (location.hash.indexOf("latest") >= 0 && S.list.length) openSession(S.list[0].id);
       else newSession();
       renderSessions();

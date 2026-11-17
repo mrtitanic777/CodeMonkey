@@ -190,6 +190,7 @@ function openRowMenu(e, x, y) {
 function newSession() {
   if (S.es) { S.es.close(); S.es = null; }
   S.current = null; S.snap = null; S.pendingFolder = null;
+  keepSession(""); restoreDraft();
   resetView();
   resetAgentBrowser();
   setSessionTitle("");
@@ -286,6 +287,7 @@ function openSession(id) {
   document.body.classList.remove("nav-open");
   if (S.es) { S.es.close(); S.es = null; }
   S.current = id; S.snap = null;
+  keepSession(id); restoreDraft();
   markReady(id, false);
   resetView();
   resetAgentBrowser();
@@ -308,6 +310,7 @@ function openSession(id) {
       // pick the stream up exactly where the record ends, so nothing falls between the two
       SYNC.seq = hist.seq || 0;
       openEvents(id, SYNC.seq);
+      restoreScroll(id); restorePane();   // as it was before CodeMonkey closed (keep.js)
     });
   }).catch(function (err) {
     if (S.current !== id) return;

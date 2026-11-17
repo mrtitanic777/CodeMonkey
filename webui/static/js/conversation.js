@@ -59,6 +59,7 @@ function newTurn() {
 function ensureTurn() { return S.turn || newTurn(); }
 
 function addUserMsg(text) {
+  document.querySelectorAll(".interrupted .btnrow").forEach(function (r) { r.remove(); });   // moved on from it
   var turn = newTurn();
   turn.lastUser = text;
   var el = h("div", "user");
@@ -724,6 +725,8 @@ function replayEntry(e) {
     addArtifactCard(e);
   } else if (e.kind === "notice") {
     addNote(e.text);
+  } else if (e.kind === "interrupted") {
+    addInterrupted(e);
   } else if (e.kind === "changes") {
     addChangesCard(e);
   } else if (e.kind === "plan") {
@@ -732,6 +735,24 @@ function replayEntry(e) {
     S.subagents[e.id || ("r" + Object.keys(S.subagents).length)] = { brief: e.brief, summary: e.summary, ok: true, done: true };
   }
 }
+/* A reply cut off when CodeMonkey closed or crashed (the server marks it when the session is opened
+   again): said plainly, with Continue, which asks again and says some steps may be done already. */
+function addInterrupted(e) {
+  if (S.turn) { finishWork(null); S.turn = null; }
+  var card = h("div", "interrupted");
+  card.appendChild(h("b", "", "This reply was cut off"));
+  card.appendChild(h("p", "", "CodeMonkey closed before it finished. The steps above were done; anything after them wasn't."));
+  var asked = String(e.text || "");
+  if (asked) {
+    var row = card.appendChild(h("div", "btnrow"));
+    row.appendChild(button("Continue", function () {
+      row.remove();
+      sendText(asked + "\n\n(This was cut off when CodeMonkey closed. Some steps may already be done: check before doing them again.)");
+    }, "primary"));
+  }
+  $("chat").appendChild(card);
+}
+
 function endReplay() {
   var busy = S.snap && S.snap.status !== "idle";
   if (S.turn && !busy) { finishWork(null); S.turn = null; }   // a turn still running stays open
