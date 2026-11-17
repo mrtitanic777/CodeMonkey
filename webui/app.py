@@ -107,7 +107,7 @@ _COMMAND_TOOLS = ("bash", "process_start")
 
 
 def tool_kind(name: str) -> str:
-    if name in ("read", "glob", "grep", "git_status", "git_diff", "process_logs", "process_list", "diagnostics") \
+    if name in ("read", "glob", "grep", "git_status", "git_diff", "process_logs", "process_list", "diagnostics", "video_watch") \
             or name.startswith("code_") or name.startswith("lsp_"):
         return "read"
     if name in ("process_start", "test_focus"):
@@ -133,6 +133,7 @@ def tool_kind(name: str) -> str:
 TOOL_GROUPS = {
     "web": ("Search the web, read pages, save pictures to show", ("web_search", "web_fetch", "picture_save")),
     "browser": ("Drive a real browser: open, read, click, fill, screenshot", ()),   # browser_*
+    "video": ("Watch a video file as frames, save a video from a direct link", ("video_watch", "video_save")),
     "helpers": ("Start, list, steer and stop background helpers", (
         "delegate", "subagent_spawn", "subagent_list", "subagent_send", "subagent_close")),
     "schedule": ("Set up work that runs by itself on a timetable, and read its history", (
@@ -828,6 +829,9 @@ class WebSession:
         for tool in webtools.web_tools(self.browser):
             register_everywhere(registry, tool)
         register_everywhere(registry, webtools.picture_tool(lambda: self.project_dir))
+        for tool in webtools.video_tools(lambda: self.project_dir,
+                                         lambda: os.path.join(app.workspace, "webui", "frames", self.id)):
+            register_everywhere(registry, tool)
         for tool in app.jobs.tools(self):
             register_everywhere(registry, tool)
         register_everywhere(registry, app.artifact_tool(self))
@@ -2259,6 +2263,10 @@ class WebSession:
         try:
             self._stream_text = ""
             self._think_text = ""   # thinking left by a stopped turn is not this turn's
+            # the session's own config follows the model chosen in the menu, so what is decided from it
+            # (whether the model is shown pictures) is about the model this turn uses, not the first one
+            if self.settings.get("provider") in (self.config.providers or {}):
+                self.config.provider = self.settings["provider"]
             self.loop.client = self._resilient(self._build_client())
             if self.app.settings.get("working_set", True):
                 from .workingset import GroundedClient
