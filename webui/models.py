@@ -151,9 +151,21 @@ def entry(model_id: str) -> Optional[Dict[str, Any]]:
     return next((m for m in CATALOG if m["id"] == model_id), None)
 
 
+#: Models served by something else (not downloaded here) whose own words for effort are known.
+#: Strata's Qwen3.8-Flash-Next thinks at its highest by default; it takes none, low, medium, high.
+SERVED_PROFILES = [
+    {"id": "qwen3.8-flash-next", "match": ["qwen3.8-flash-next", "flash-next"], "thinking": True, "context": 262144,
+     "efforts": {"off": "none", "low": "low", "medium": "medium", "high": "high"}, "calm": "medium"},
+]
+
+
 def profile_for(model_name: str) -> Dict[str, Any]:
     """What is known about how to drive a model, found by its name. {} when nothing is known."""
     low = str(model_name or "").lower().replace("_", "-")
+    for m in SERVED_PROFILES:
+        if any(n in low for n in m["match"]):
+            return {"sampling": {}, "thinking": True, "context": m["context"], "id": m["id"], "efforts": m["efforts"],
+                    "budget_field": "", "calm": m["calm"], "budgets": {}}
     for m in CATALOG:
         names = list(m.get("match") or []) + [m["id"]] + ([m["file"].lower().replace("_", "-").rsplit(".", 1)[0]] if m.get("file") else [])
         if any(n and n in low for n in names):
@@ -180,11 +192,11 @@ def reasoning_params(profile: Dict[str, Any], effort: str) -> Dict[str, Any]:
         return {}
     words = profile.get("efforts") or _GENERIC_EFFORTS
     out: Dict[str, Any] = {}
+    if effort == "off" and not words.get("off"):
+        effort = "low"   # a model with no word for none thinks as little as it can instead
     if effort == "off":
         # no thinking at all, for a model known to take a word for it; the budget field is
         # cleared (None is not sent) so an earlier budget does not travel with it
-        if not words.get("off"):
-            return {}
         out["reasoning_effort"] = words["off"]
         if profile.get("budget_field"):
             out[profile["budget_field"]] = None

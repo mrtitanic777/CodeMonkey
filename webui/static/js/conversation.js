@@ -878,7 +878,7 @@ function openReview(turn) {
   }).catch(function () {});
 }
 
-var EFFORT_WORDS = { auto: "Chooses for each request", low: "Fastest: little thinking, first good approach",
+var EFFORT_WORDS = { auto: "Fits each message: no thinking for a hello, deep thinking for a bug hunt (say \"think hard\" or \"quickly\" to steer it)", low: "Fastest: little thinking, first good approach",
   medium: "Balanced", high: "Thinks longer and checks before editing", max: "As long as it takes" };
 
 /* The sidebar's group and sort menu (Claude Code's icon beside the first heading). */

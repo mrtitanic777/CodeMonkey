@@ -4,7 +4,7 @@
 
 /* ---------------- live events (SSE) ---------------- */
 
-var EVENT_TYPES = ["state", "user_message", "prefill", "turn_start", "token", "claims", "activity", "subagent_progress", "artifact", "tool_call", "tool_progress", "tool_result",
+var EVENT_TYPES = ["state", "user_message", "prefill", "turn_start", "turn_effort", "token", "claims", "activity", "subagent_progress", "artifact", "tool_call", "tool_progress", "tool_result",
   "permission_request", "permission_resolved", "plan_ready", "plan_decision", "todo_update",
   "subagent_start", "subagent_end", "checkpoint_created", "rewind_done", "notice", "turn_end",
   "settings_changed", "session_end", "context_compacted", "elicitation_request", "elicitation_resolved",
@@ -208,6 +208,7 @@ function openAppEvents() {
     settingsTimer = setTimeout(function () {
       api("GET", "/api/settings").then(function (st) { S.settings = st; applyUi(); renderPickers(); })
         .catch(function () {});
+      reloadConfig();   // a model server that has started, a key added elsewhere
     }, 300);
   });
   es.addEventListener("plugins", function (e) {   // commands and agents may have changed
@@ -255,6 +256,8 @@ function handleEvent(type, d) {
       if (d.client_id && S.sentIds[d.client_id]) { delete S.sentIds[d.client_id]; break; }
       addUserMsg(d.text || "");
       break;
+    case "turn_effort":   // Auto's choice for this message (webui/effort.py), said on the working line
+      S.turnEffort = d; tickLive(); break;
     case "turn_start":
       setStatus("working");
       S.workStart = Date.now(); S.liveStep = "";
@@ -380,7 +383,8 @@ function setWorking(on) {
   $("send-btn").classList.toggle("hidden", on);
   $("chat").setAttribute("aria-busy", on ? "true" : "false");
   if (on && !S.workStart) S.workStart = Date.now();
-  if (!on) S.workStart = 0;
+  if (!on) { S.workStart = 0; S.turnEffort = null; }
+  pollModelLive(on);
   tickLive();
 }
 function tickLive() {
@@ -391,7 +395,35 @@ function tickLive() {
   // Claude Code's line: the spark, then "41s · 2.9k tokens"
   var toks = S.snap && (S.snap.tokens_out || 0), secs = Math.floor((Date.now() - S.workStart) / 1000);
   $("live-time").textContent = (secs < 60 ? secs + "s" : Math.floor(secs / 60) + "m " + (secs % 60) + "s") +
-    (toks ? " · ↓ " + fmtNum(toks) + " tokens" : "") +
+    (toks ? " · ↓ " + fmtNum(toks) + " tokens" : "") + liveModelText() +
+    (S.turnEffort ? " · thinking: " + S.turnEffort.label : "") +
     (S.liveTool === "bash" && !waiting ? " · Ctrl+B to run in background" : "") + " · Esc to stop";
 }
 setInterval(tickLive, 1000);
+
+/* What a model server on this computer is doing while it answers (webui/modellive.py): reading the
+   request, how fast it writes. Asked only while working; a server that does not say gives nothing. */
+S.modelLive = null;
+function pollModelLive(on) {
+  clearTimeout(S.modelLiveTimer);
+  if (!on) { S.modelLive = null; return; }
+  var provider = effective().provider;
+  if (!provider) return;
+  api("GET", "/api/models/live?provider=" + encodeURIComponent(provider)).then(function (m) {
+    S.modelLive = m && m.state ? m : null;
+    if (S.modelLive) S.lastModelLive = S.modelLive;
+    tickLive();
+  }).catch(function () {}).then(function () {
+    if (S.workStart) S.modelLiveTimer = setTimeout(function () { pollModelLive(true); }, 1500);
+  });
+}
+function liveModelText() {
+  var m = S.modelLive;
+  if (!m) return "";
+  if (m.state === "reading" && m.total) {
+    return " · reading your request" + (m.read ? " " + Math.round(100 * m.read / m.total) + "%" : "");
+  }
+  if (m.tok_s) return " · " + Math.round(m.tok_s) + " tokens/s";
+  if (m.state === "queued") return " · waiting its turn";
+  return "";
+}

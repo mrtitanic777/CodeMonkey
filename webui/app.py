@@ -174,6 +174,32 @@ def native_project(project_dir: str, limit: int = 3000) -> bool:
     return False
 
 
+#: Lean mode, for a model on this computer (Settings > Models): these wait to be loaded too. Every
+#: tool's description is read again on every request, and a local model reads slowly; the ones a
+#: turn rarely needs stay out until the model asks for them.
+LEAN_GROUPS = {
+    "graph": ("Who calls what, what a change would affect, a map of the code", (
+        "code_callers", "code_callees", "code_explore", "code_impact", "code_node")),
+    "memory": ("Save and search what is remembered about this user and project", ("memory_save", "memory_search")),
+    "checks": ("Language-server diagnostics, the tests that cover a change, git status and diff", (
+        "diagnostics", "test_focus", "git_status", "git_diff")),
+    "tasks": ("Suggest a separate task for later, and read the to-do list", ("suggest_task", "todo_list")),
+}
+
+
+def lean_group(name: str) -> str:
+    for group, (_, names) in LEAN_GROUPS.items():
+        if name in names:
+            return group
+    return ""
+
+
+def is_local(base_url: str) -> bool:
+    import urllib.parse
+
+    return urllib.parse.urlsplit(base_url or "").hostname in ("127.0.0.1", "localhost", "::1")
+
+
 def tool_group(name: str) -> str:
     if name.startswith("browser_"):
         return "browser"
@@ -1153,31 +1179,42 @@ class WebSession:
         def offered() -> List[Dict[str, Any]]:
             if not self.app.settings.get("lazy_tools", True):
                 return [s for s in everything() if s["function"]["name"] != "tools_load"]
+            lean = self.lean()
             return [
                 s for s in everything()
-                if not tool_group(s["function"]["name"]) or tool_group(s["function"]["name"]) in self._loaded_groups
+                if (not tool_group(s["function"]["name"]) or tool_group(s["function"]["name"]) in self._loaded_groups)
+                and (not lean or not lean_group(s["function"]["name"]) or lean_group(s["function"]["name"]) in self._loaded_groups)
             ]
 
         def load(group: str) -> str:
             group = str(group or "").strip().lower()
-            if group not in TOOL_GROUPS:
-                return "ERROR: no such group. Groups: " + ", ".join(TOOL_GROUPS)
+            if group not in TOOL_GROUPS and group not in LEAN_GROUPS:
+                return "ERROR: no such group. Groups: " + ", ".join(list(TOOL_GROUPS) + list(LEAN_GROUPS))
             self._loaded_groups.add(group)
-            names = [s["function"]["name"] for s in everything() if tool_group(s["function"]["name"]) == group]
+            of = tool_group if group in TOOL_GROUPS else lean_group
+            names = [s["function"]["name"] for s in everything() if of(s["function"]["name"]) == group]
             return f"Loaded. You can now call: {', '.join(names)}."
 
         register_everywhere(registry, Tool(
             name="tools_load",
             description=(
                 "More tools exist than are listed here. Load a group before using it: "
-                + "; ".join(f"{g}: {d.lower()}" for g, (d, _) in TOOL_GROUPS.items()) + "."
+                + "; ".join(f"{g}: {d.lower()}" for g, (d, _) in list(TOOL_GROUPS.items()) + list(LEAN_GROUPS.items()))
+                + ". (Groups already offered need no loading.)"
             ),
             parameters={"type": "object", "properties": {
-                "group": {"type": "string", "description": "One of: " + ", ".join(TOOL_GROUPS)}},
+                "group": {"type": "string", "description": "One of: " + ", ".join(list(TOOL_GROUPS) + list(LEAN_GROUPS))}},
                 "required": ["group"]},
             func=load,
         ))
         registry.schemas = offered  # type: ignore[method-assign]
+
+    def lean(self) -> bool:
+        """Lean mode: the model in use runs on this computer, and the setting is on (the default)."""
+        if not self.app.settings.get("lean_local", True):
+            return False
+        entry = (self.config.providers or {}).get(self.settings.get("provider") or "") or {}
+        return is_local(entry.get("base_url") or "")
 
     def _ledger_line(self, name: str, args: Dict[str, Any], text: str) -> None:
         """The actions that change something outside the conversation go in the activity ledger."""
@@ -1277,7 +1314,7 @@ class WebSession:
 
         client = self.app.client_for(
             provider or self.settings["provider"], model or self.settings.get("model") or self.config.model,
-            str(self.settings.get("effort", "auto")),
+            str(getattr(self, "_turn_effort", "") or self.settings.get("effort", "auto")),
         )
         if isinstance(client, KeSSieClient):
             # KeSSie re-ingests history per request; keep it bounded.
@@ -1426,7 +1463,21 @@ class WebSession:
             mgr._max_chars = int(self.settings["context_budget"]) * 4
         return wrapped
 
+    def _turn_effort_for(self, text: str) -> str:
+        """The effort for this turn: the menu's setting, or with Auto one chosen from the message."""
+        setting = str(self.settings.get("effort", "auto"))
+        if setting != "auto":
+            return setting
+        from .effort import LABELS, choose
+
+        effort, why = choose(text)
+        self.bus.emit("turn_effort", {"effort": effort, "label": LABELS[effort], "why": why})
+        return effort
+
     def _apply_effort(self) -> tuple:
+        # Auto's choice for one message goes to the model as its own effort setting (client_for) and
+        # nowhere else: a note in the system prompt that changed from message to message would make
+        # a local server read the whole conversation again every time instead of reusing it.
         effort = EFFORTS.get(self.settings.get("effort", "auto"), EFFORTS["auto"])
         base = self.config.max_iterations
         scaled = max(2, int(base * effort["iter_mult"]))
@@ -2163,6 +2214,8 @@ class WebSession:
         if recorder is not None:
             recorder.reset()
             recorder.start()
+        # how hard to think: the menu's level, or with Auto one fitted to this message (webui/effort.py)
+        self._turn_effort = self._turn_effort_for(shown)
         base_iters, scaled = self._apply_effort()
         started = time.monotonic()
         in_chars = sum(len(json.dumps(m)) for m in self.history) + len(full_text)
@@ -2192,6 +2245,7 @@ class WebSession:
             )
         finally:
             self._clear_effort(base_iters)
+            self._turn_effort = ""   # helpers and background work after the turn use the menu's level
         elapsed_ms = int((time.monotonic() - started) * 1000)
         out_chars = len(reply or "")
         in_tokens, out_tokens = in_chars // 4, out_chars // 4
@@ -2934,6 +2988,7 @@ class WebApp:
         "always_commands",
         "guard",
         "risky_check",
+        "lean_local",
         "claim_labels",
         "code_gate",
         "gate_tests",
@@ -2981,6 +3036,8 @@ class WebApp:
             "guard": "ask",
             # "on": a command that can destroy work (webui/risky.py) is asked about in every mode
             "risky_check": "on",
+            # a model on this computer is offered fewer tools up front (LEAN_GROUPS), so it reads less
+            "lean_local": True,
             "claim_labels": True,
             # off | check (refuse what cannot be right; report broken tests) | strict (and undo the change)
             "code_gate": "check",
@@ -3040,6 +3097,7 @@ class WebApp:
             settings["guard"] = "ask"
         if settings.get("risky_check") not in ("on", "off"):
             settings["risky_check"] = "on"
+        settings["lean_local"] = bool(settings.get("lean_local", True))
         if settings.get("permission_mode") not in PERMISSION_MODES:
             settings["permission_mode"] = "ask"
         if not isinstance(settings.get("always_commands"), list):

@@ -548,7 +548,7 @@ function keyForm(name, p) {
 
 /* What a provider is called on screen; its own id stays in config.yaml. */
 var PROVIDER_NAMES = { anthropic: "Claude (Anthropic)", openai: "OpenAI", openrouter: "OpenRouter", ollama: "Ollama",
-  lmstudio: "LM Studio", kessie: "KeSSie", vllm: "vLLM" };
+  lmstudio: "LM Studio", kessie: "KeSSie", vllm: "vLLM", strata: "Strata" };
 function providerName(id) { return PROVIDER_NAMES[id] || id; }
 
 PAGES.models = function (pane) {
@@ -557,6 +557,9 @@ PAGES.models = function (pane) {
   guide.type = "button";
   guide.onclick = function () { closeSettings(); openModelSetup(); };
   pane.appendChild(row("srow", "New to this?", "A step-by-step guide: what is on this computer, which model fits it, and how to start it", guide));
+  pane.appendChild(row("srow", "Lean mode for models on this computer",
+    "A model running here reads slowly, and every tool's description is read on every request: the rarely used ones are offered only when the model asks for them. Answers start sooner",
+    toggleControl(S.settings.lean_local !== false, function (on) { saveSetting({ lean_local: on }); })));
   var st = S.settings, provs = S.config.providers || {}, states = [];
   Object.keys(provs).forEach(function (name) {
     var p = provs[name];

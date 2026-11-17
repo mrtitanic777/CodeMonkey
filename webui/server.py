@@ -424,6 +424,12 @@ class WebHandler(BaseHTTPRequestHandler):
                 return self._serve_static(path[1:])
             if path == "/api/config":
                 return self._json(self.app.config_snapshot())
+            if path == "/api/models/live":   # what a model server on this computer is doing now (modellive.py)
+                from .modellive import live
+
+                name = (query.get("provider") or [""])[0]
+                entry = (self.app.config.providers or {}).get(name) or {}
+                return self._json(live(entry.get("base_url") or "") or {})
             if path == "/api/models/available":   # what the model menu may offer: live models only
                 return self._json(self.app.available_models(bool((query.get("fresh") or [""])[0])))
             if path == "/api/mcp":

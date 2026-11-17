@@ -2703,7 +2703,8 @@ def test_talking_to_a_local_reasoning_model_the_way_its_server_needs():
     assert models_mod.reasoning_params(bonsai, "high") == {"reasoning_effort": "xhigh", "thinking_budget_tokens": 8192}
     assert models_mod.reasoning_params(bonsai, "low") == {"reasoning_effort": "medium", "thinking_budget_tokens": 1024}
     assert models_mod.reasoning_params(bonsai, "off") == {"reasoning_effort": "none", "thinking_budget_tokens": None}
-    assert models_mod.reasoning_params(qwen, "off") == {}, "a model with no word for it is not told to stop thinking"
+    # a model with no word for "no thinking" is not told to stop: it thinks as little as it can
+    assert models_mod.reasoning_params(qwen, "off") == models_mod.reasoning_params(qwen, "low")
     assert models_mod.reasoning_params(qwen, "medium") == {"reasoning_effort": "medium"}
     assert models_mod.reasoning_params(qwen, "auto") == {} and models_mod.reasoning_params({}, "high") == {}
     line = models_mod.shown(models_mod.command(models_mod.entry("bonsai2-27b-pq2"), {"flags": ["-ngl", "99"], "context": 32768}, "m.gguf", sleep_minutes=15))
@@ -3243,7 +3244,8 @@ def test_pages_stay_in_step_replay_resync_and_no_double_sends():
             behind = _read_stream(f"{base}/api/sessions/{sid}/events?after={hist['seq']}", 6, 4)
             ids = [eid for eid, _, _ in behind[1:]]
             assert ids == sorted(set(ids)) and ids[0] == hist["seq"] + 1, ids
-            assert [t for _, t, _ in behind[1:4]] == ["user_message", "turn_start", "token"], behind[1:4]
+            kinds = [t for _, t, _ in behind if t != "turn_effort"]   # Auto's level for the message, said too
+            assert kinds[1:4] == ["user_message", "turn_start", "token"], behind[1:5]
             # the browser's own reconnect header works the same way
             again = _read_stream(f"{base}/api/sessions/{sid}/events", 3, 4,
                                  headers={"Last-Event-ID": str(hist["seq"])})

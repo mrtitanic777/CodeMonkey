@@ -57,6 +57,13 @@ function setSessionTitle(title) {
 
 /* The model button: the chosen model, or "No models" until one is chosen (a new install). */
 function modelLabel(eff) {
+  // a model server that starts with CodeMonkey and is still loading its model (webui/autostart.py)
+  var p = S.config && S.config.providers && S.config.providers[eff.provider];
+  if (p && p.starting === "starting") {
+    clearTimeout(S.startingTimer);   // asked again until it answers
+    S.startingTimer = setTimeout(function () { reloadConfig(); }, 4000);
+    return (typeof providerName === "function" ? providerName(eff.provider) : eff.provider) + " is starting…";
+  }
   return eff.model && eff.model !== "default" ? eff.model : "No models";
 }
 function needsKey(p) { return (p.needs_key || p.custom) && !(p.key && p.key.source); }
@@ -242,6 +249,18 @@ MENU_BUILDERS["model-menu"] = function (m) {
       m.appendChild(h("div", "mh")).appendChild(h("span", "", "No model is running yet."));
       m.appendChild(menuRow("plus", "Set up a model", function () { openModelSetup(); }));
     }
+    // a model server on this computer that says how it is doing (webui/modellive.py)
+    var health = m.appendChild(h("div", "modelhealth hidden"));
+    api("GET", "/api/models/live?provider=" + encodeURIComponent(eff.provider || "")).then(function (s) {
+      if (!s || !s.state) return;
+      var bits = [];
+      if (s.last_tok_s) bits.push("last reply " + Math.round(s.last_tok_s) + " tokens/s");
+      if (s.last_prompt && s.last_reused) bits.push(Math.round(100 * s.last_reused / s.last_prompt) + "% of it already in its memory");
+      if (s.vram_free_mib != null) bits.push((s.vram_free_mib / 1024).toFixed(1) + " GB graphics memory free");
+      if (!bits.length) return;
+      health.textContent = providerName(eff.provider) + ": " + bits.join(" · ");
+      health.classList.remove("hidden");
+    }).catch(function () {});
     m.appendChild(h("div", "sep"));
     m._effort = flyoutRow(m, "Effort", (efforts[eff.effort] || {}).label || "Auto", function (f) {
       Object.keys(efforts).forEach(function (k, i) {
