@@ -105,9 +105,11 @@ class KnowledgeBase:
         if s.get("cpp_floor"):
             import sqlite3
             db = sqlite3.connect(self.path(name))
-            db.execute("INSERT OR REPLACE INTO meta VALUES ('cpp_floor', ?)", (s["cpp_floor"],))
-            db.commit()
-            db.close()
+            try:
+                db.execute("INSERT OR REPLACE INTO meta VALUES ('cpp_floor', ?)", (s["cpp_floor"],))
+                db.commit()
+            finally:
+                db.close()   # a locked or half-written pack must not leave the file held open
         self._close(name)
         return result
 

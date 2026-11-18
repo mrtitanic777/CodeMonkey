@@ -202,25 +202,28 @@ class Docs:
                                                      tokenize='porter unicode61');
         """)
         t0, n_sec = time.time(), 0
-        for i, path in enumerate(pages):
-            page = read_page(path)
-            if not page["title"] or not page["sections"]:
-                continue
-            rel = os.path.relpath(path, folder).replace("\\", "/")
-            cur = con.execute("insert into pages(path, title, keywords) values (?,?,?)",
-                              (rel, page["title"], " ".join(page["keywords"])))
-            for heading, body in page["sections"]:
-                con.execute("insert into sections(title, heading, body, page) values (?,?,?,?)",
-                            (page["title"] + " " + " ".join(page["keywords"][:3]), heading, body, cur.lastrowid))
-                n_sec += 1
-            if progress and i % 2000 == 0:
-                progress(src["name"], i, len(pages))
-        con.executemany("insert into meta values (?,?)", [("format", FORMAT), ("name", src["name"]), ("note", src["note"]),
-                                                          ("platforms", ",".join(src["platforms"])), ("chm", src["chm"])])
-        con.commit()
-        con.execute("insert into sections(sections) values ('optimize')")
-        con.commit()
-        con.close()
+        try:
+            for i, path in enumerate(pages):
+                page = read_page(path)
+                if not page["title"] or not page["sections"]:
+                    continue
+                rel = os.path.relpath(path, folder).replace("\\", "/")
+                cur = con.execute("insert into pages(path, title, keywords) values (?,?,?)",
+                                  (rel, page["title"], " ".join(page["keywords"])))
+                for heading, body in page["sections"]:
+                    con.execute("insert into sections(title, heading, body, page) values (?,?,?,?)",
+                                (page["title"] + " " + " ".join(page["keywords"][:3]), heading, body, cur.lastrowid))
+                    n_sec += 1
+                if progress and i % 2000 == 0:
+                    progress(src["name"], i, len(pages))
+            con.executemany("insert into meta values (?,?)", [("format", FORMAT), ("name", src["name"]),
+                                                              ("note", src["note"]),
+                                                              ("platforms", ",".join(src["platforms"])), ("chm", src["chm"])])
+            con.commit()
+            con.execute("insert into sections(sections) values ('optimize')")
+            con.commit()
+        finally:
+            con.close()   # one page that will not read must not leave the pack half-built and held open
         os.replace(tmp, self.path(src["name"]))
         return {"name": src["name"], "pages": len(pages), "sections": n_sec, "seconds": round(time.time() - t0)}
 

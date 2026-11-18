@@ -375,6 +375,10 @@ class OpenAICompatClient(ModelClient):
                 return urllib.request.urlopen(req, timeout=self.timeout)
             except urllib.error.HTTPError as exc:
                 last = RuntimeError(_http_error(exc))
+                try:
+                    exc.close()   # a rejected attempt holds its connection until the garbage runs
+                except Exception:  # noqa: BLE001
+                    pass
                 if exc.code not in (400, 404, 422) or _TOO_LONG.search(str(last)):
                     break
             except Exception as exc:  # noqa: BLE001
