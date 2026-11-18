@@ -337,7 +337,7 @@ def test_a_web_session_answers_for_its_own_tool_calls():
             session = app.create_session(tmp)
             session.settings["permission_mode"] = "auto"
             model = _Model()
-            session._raw_client = lambda *a: model
+            session._raw_client = lambda *a, **kw: model   # sampling asks for a one-shot client
             CALLER.value = session          # this thread plays the session's worker
             out = session.loop.registry.execute("mcp__full__ask_model", {"text": "hello"})
             assert out.startswith("model says: hello"), out
