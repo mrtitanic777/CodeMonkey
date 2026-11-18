@@ -32,6 +32,12 @@ class EventBus:
         with self._lock:
             return self._seq
 
+    @property
+    def subscribers(self) -> int:
+        """How many pages are listening right now. 0 means nobody is watching this session."""
+        with self._lock:
+            return len(self._subs)
+
     def subscribe(self) -> "queue.Queue[Dict[str, Any]]":
         return self.subscribe_from(None)[0]
 

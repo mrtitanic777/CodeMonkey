@@ -208,6 +208,32 @@ def http(method, url, body=None):
         return exc.code, payload
 
 
+def test_an_oversized_request_body_is_refused():
+    """Content-Length is the client's word. A paired phone, or any program on this computer, could
+    declare a body of any size and have the app allocate it; the read is capped instead."""
+    from webui.server import MAX_BODY_BYTES
+
+    with tempfile.TemporaryDirectory() as tmp:
+        app, server, base = start_server(tmp)
+        try:
+            req = urllib.request.Request(base + "/api/sessions", method="POST",
+                                         headers={"Content-Type": "application/json",
+                                                  "Content-Length": str(MAX_BODY_BYTES + 1)})
+            started = time.time()
+            try:
+                urllib.request.urlopen(req, timeout=10).read()
+                raise AssertionError("an oversized body must be refused")
+            except urllib.error.HTTPError as exc:
+                assert exc.code == 413, (exc.code, exc.read()[:200])
+            assert time.time() - started < 5, "it must not wait for bytes that were never sent"
+            # an ordinary body still works
+            status, snap = http("POST", base + "/api/sessions", {"project_dir": tmp})
+            assert status == 201 and snap["id"], (status, snap)
+        finally:
+            server.shutdown()
+    print("PASS test_an_oversized_request_body_is_refused")
+
+
 def make_session_with_fake(base, project_dir, script):
     status, snap = http("POST", base + "/api/sessions", {"project_dir": project_dir})
     assert status == 201, (status, snap)

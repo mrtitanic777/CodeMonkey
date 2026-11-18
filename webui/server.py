@@ -15,6 +15,7 @@ import re
 import subprocess
 import sys
 import threading
+import time
 import traceback
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -47,6 +48,11 @@ def _fuzzy(needle: str, hay: str) -> bool:
 
 
 _FILES_CACHE: Dict[str, tuple] = {}   # folder -> (when listed, files)
+_FILES_CACHE_MAX = 8                  # an entry can be 50,000 paths, so the oldest folder drops out
+
+#: The largest request body the app will read. The biggest thing a page normally sends is a
+#: picture or a clip of speech for a call (a few MB); nothing legitimate needs more than this.
+MAX_BODY_BYTES = 64 * 1024 * 1024
 
 
 def _project_files(project_dir: str) -> list:
@@ -76,6 +82,8 @@ def _project_files(project_dir: str) -> list:
             if len(files) > 20000:   # a huge tree: enough to choose from
                 break
     _FILES_CACHE[project_dir] = (now, files)
+    while len(_FILES_CACHE) > _FILES_CACHE_MAX:
+        _FILES_CACHE.pop(next(iter(_FILES_CACHE)))
     return files
 
 
@@ -154,6 +162,11 @@ class WebHandler(BaseHTTPRequestHandler):
 
         The connection is kept alive, so a body left unread would be taken for the next
         request line; do_POST and do_DELETE therefore always call this first.
+
+        Content-Length is the client's word, not ours: a paired phone, or any program on this
+        computer, could ask for a body of any size and have us allocate it. So the read is capped
+        and an oversized request is refused outright (and the connection ends with the answer,
+        since what is left of the body is never read).
         """
         cached = getattr(self, "_body", None)
         if cached is not None:
@@ -161,7 +174,12 @@ class WebHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0) or 0)
         data: Dict[str, Any] = {}
         self._raw = b""   # the body as it came, for the one request that is not JSON (a call's audio)
+        self._body_too_big = 0
         if length:
+            if length > MAX_BODY_BYTES:
+                self._body_too_big = length
+                self.close_connection = True
+                return data
             self._raw = self.rfile.read(length)
             try:
                 parsed = json.loads(self._raw or b"{}")
@@ -375,6 +393,10 @@ class WebHandler(BaseHTTPRequestHandler):
 
     def _session(self, session_id: str):
         session = self.app.get_session(session_id)
+        if session is None:
+            # A session that was retired while nobody was watching (webui/app.py) comes back from
+            # its saved conversation, so a click in the sidebar always works.
+            session = self.app.reopen_session(session_id)
         if session is None:
             self._error(f"unknown session {session_id}", 404)
             return None
@@ -789,6 +811,8 @@ class WebHandler(BaseHTTPRequestHandler):
             return self._pair_page(self.app.phone.locked() or "That is not the code. Check it and try again.")
         self._body = None
         self._read_json()
+        if getattr(self, "_body_too_big", 0):
+            return self._error("that is too big for this app to read (over 64 MB)", 413)
         if not self._own_origin():
             return self._error("requests from other pages are not accepted", 403)
         if not self._has_key():
@@ -1546,6 +1570,8 @@ class WebHandler(BaseHTTPRequestHandler):
         path = urllib.parse.urlparse(self.path).path
         self._body = None
         self._read_json()
+        if getattr(self, "_body_too_big", 0):
+            return self._error("that is too big for this app to read (over 64 MB)", 413)
         if not self._own_origin():
             return self._error("requests from other pages are not accepted", 403)
         if not self._has_key():
@@ -1751,6 +1777,25 @@ class WebHandler(BaseHTTPRequestHandler):
             return None
 
 
+def _start_session_reaper(app) -> None:
+    """Every few minutes, let go of sessions nobody is finished with (webui/app.py).
+
+    A session holds a worker thread, the project's language servers and any background programs it
+    started. The page stops watching one as soon as you open another, and nothing told the server,
+    so an afternoon of work used to leave every session opened still running. The conversation is
+    on disk either way, so the next click brings it back.
+    """
+    def loop() -> None:
+        while True:
+            time.sleep(120)
+            try:
+                app.close_idle_sessions()
+            except Exception:  # noqa: BLE001 - the reaper must never die
+                pass
+
+    threading.Thread(target=loop, name="session-reaper", daemon=True).start()
+
+
 def serve(app, host: str = "127.0.0.1", port: int = 8080) -> ThreadingHTTPServer:
     """Start the server (blocking)."""
     from . import report
@@ -1773,6 +1818,7 @@ def serve(app, host: str = "127.0.0.1", port: int = 8080) -> ThreadingHTTPServer
     server.daemon_threads = True
     if not app.watchdog.is_alive():
         app.watchdog.start()
+    _start_session_reaper(app)   # finished-with sessions let go of their thread and servers
     app.jobs.start()
     app.learner.start()
     app.codeknow.start()   # the C/C++ knowledge base: built or refreshed in the background

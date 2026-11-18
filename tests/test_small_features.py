@@ -117,6 +117,61 @@ def test_statusline_command_gets_the_session_and_phones_cannot_set_it():
     print("PASS test_statusline_command_gets_the_session_and_phones_cannot_set_it")
 
 
+def test_an_approval_nobody_answers_ends_as_a_denial():
+    """A phone that went to sleep used to hold the worker - and the session with it - open for as
+    long as the app ran. The wait is bounded now, and the turn ends with a plain denial."""
+    import threading
+
+    from test_webui import start_server
+
+    with tempfile.TemporaryDirectory() as tmp:
+        app, server, base = start_server(tmp)
+        try:
+            session = app.create_session(tmp)
+            session.gate.WAIT_SECONDS = 0.2
+            out = {}
+
+            def ask():
+                out["result"] = session.gate("write_file", {"path": "x.txt"}, "a change")
+
+            t = threading.Thread(target=ask)
+            t.start()
+            t.join(10)
+            assert not t.is_alive(), "the wait must not go on for ever"
+            allowed, message = out["result"]
+            assert allowed is False and "nobody answered" in message, out
+            assert session.gate.current is None, "the question is cleared, not left pending"
+            assert session.status != "permission", session.status
+            session.close()
+        finally:
+            server.shutdown()
+    print("PASS test_an_approval_nobody_answers_ends_as_a_denial")
+
+
+def test_a_closed_session_forgets_its_exit_hook():
+    """Every session that ran a background command left an exit hook behind for the life of the
+    app, and at exit they all ran again over programs that had long gone."""
+    import atexit
+
+    import coder.processes as cp
+
+    registered, unregistered = [], []
+    real_register, real_unregister = atexit.register, atexit.unregister
+    cp.atexit.register = lambda fn: (registered.append(fn), real_register(fn))[1]
+    cp.atexit.unregister = lambda fn: (unregistered.append(fn), real_unregister(fn))[1]
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            pm = cp.ProcessManager(tmp)
+            assert registered and registered[-1] == pm.stop_all
+            pm.close()
+            assert unregistered and unregistered[-1] == pm.stop_all, "the exit hook is dropped"
+            assert pm.running == {}
+            pm.close()   # closing twice is fine
+    finally:
+        cp.atexit.register, cp.atexit.unregister = real_register, real_unregister
+    print("PASS test_a_closed_session_forgets_its_exit_hook")
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):

@@ -439,6 +439,9 @@ class PermissionGate:
     permission_request via POST.
     """
 
+    #: How long an unanswered question may hold the worker (see __call__).
+    WAIT_SECONDS = 60 * 60
+
     def __init__(self, session: "WebSession"):
         self.session = session
         self._lock = threading.Lock()
@@ -524,7 +527,17 @@ class PermissionGate:
                 "request": request,
             }
         session.bus.emit("permission_request", request)
-        event.wait()
+        # Wait for an answer, but not for ever. A phone that went to sleep, or a window closed on
+        # another device, used to hold the worker - and the whole session with it - open for as
+        # long as the app ran. An hour is longer than anyone takes to answer; after that the turn
+        # ends with a plain denial, which the page can say, rather than a turn that never ends.
+        answered = event.wait(timeout=self.WAIT_SECONDS)
+        if not answered:
+            with self._lock:
+                waiting = self._pending.get(request_id)
+                if waiting is not None and waiting["decision"] is None:
+                    waiting["decision"] = "deny"
+                    waiting["message"] = "nobody answered in time"
         with self._lock:
             record = self._pending.pop(request_id, None)
             waiting = any(r["decision"] is None for r in self._pending.values())
@@ -703,7 +716,8 @@ class WebSession:
         from coder.processes import ProcessManager
 
         if getattr(self, "processes", None) is not None:
-            self.processes.stop_all()   # moving to another folder: what ran in the old one stops
+            # moving to another folder: what ran in the old one stops, and its exit hook goes with it
+            self.processes.close()
         self.processes = ProcessManager(self.project_dir)
         self.processes.on_finish = self._background_finished
         if getattr(self, "lsp", None) is not None:
@@ -2270,7 +2284,8 @@ class WebSession:
             # that sent it recognises its own by the id and does not show it twice.
             with self._lock:
                 self.bus.emit("user_message", {"text": shown, "client_id": getattr(self, "_client_id", ""),
-                                               "voice": self._voice})
+                                               # only said when it was: a plain message keeps its shape
+                                               **({"voice": True} if self._voice else {})})
                 # its turn and where the model's history stood: what rewinding to it goes back to
                 self._record({"kind": "user", "text": shown, "turn": turn_id, "h": len(self.history),
                               **({"voice": True} if self._voice else {})})
@@ -2979,10 +2994,13 @@ class WebSession:
         }
 
     def close(self) -> None:
+        if getattr(self, "_closed", False):
+            return   # a reaper and a delete can both reach here
+        self._closed = True
         self._hook_event("session_end", {})
         self.alive = False
         self.helpers.stop_all()
-        self.processes.stop_all()
+        self.processes.close()   # stops them and forgets this session's exit hook
         self.lsp.close()
         self.cancel()  # a pending approval must not keep the worker blocked
         self.inbox.put(None)
@@ -3461,6 +3479,55 @@ class WebApp:
     def get_session(self, session_id: str) -> Optional[WebSession]:
         with self._lock:
             return self.sessions.get(session_id)
+
+    #: How long a session may sit with nobody watching before its thread, language servers and
+    #: background handles are let go. Reopening it is one click and costs a second.
+    IDLE_CLOSE_AFTER = 30 * 60
+
+    def close_idle_sessions(self, idle_seconds: Optional[float] = None) -> List[str]:
+        """Retire sessions that are finished with, so the app does not grow for ever.
+
+        A session is retired only when it is safe to: idle, nothing queued, nobody watching it
+        over the event stream, no question waiting for an answer, no helper working, and no
+        background program of its own still running. Its conversation stays on disk, so opening
+        it again in the sidebar restores it exactly (the page does that by itself).
+
+        What is lost is session-scoped only: the "always allow" choices for that session.
+        """
+        limit = self.IDLE_CLOSE_AFTER if idle_seconds is None else float(idle_seconds)
+        now = datetime.datetime.now()
+        retired: List[str] = []
+        with self._lock:
+            candidates = list(self.sessions.items())
+        for session_id, session in candidates:
+            if not getattr(session, "alive", False):
+                retired.append(session_id)
+                continue
+            if session.status != "idle" or not session.inbox.empty():
+                continue
+            if getattr(session, "_trial", False):   # an agent trial is still reading it
+                continue
+            if session.bus.subscribers or session.gate.current or session._pending_plan:
+                continue
+            if any(h["status"] == "running" for h in session.helpers.snapshot()):
+                continue
+            if any(r.proc.poll() is None for r in session.processes.running.values()):
+                continue
+            try:
+                last = datetime.datetime.fromisoformat(session.last_active)
+            except (TypeError, ValueError):
+                last = now
+            if (now - last).total_seconds() < limit:
+                continue
+            with self._lock:
+                if self.sessions.get(session_id) is not session:
+                    continue   # reopened a moment ago: leave it alone
+                del self.sessions[session_id]
+            session.close()
+            retired.append(session_id)
+        if retired:
+            self.bus.emit("sessions", {})
+        return retired
 
     def refresh_index_entry(self, session: WebSession) -> None:
         self.bus.emit("sessions", {"id": session.id})

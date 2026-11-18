@@ -6,6 +6,7 @@ import json
 import os
 import sys
 import tempfile
+import threading
 import urllib.error
 import urllib.request
 
@@ -47,6 +48,55 @@ def test_unused_sessions_drop_out_and_opening_keeps_the_place():
     print("PASS test_unused_sessions_drop_out_and_opening_keeps_the_place")
 
 
+def test_a_session_nobody_watches_is_let_go_and_comes_back():
+    """A session holds a worker thread and the project's language servers. Once no page is
+    watching it and its work is done, the app lets those go; the conversation is on disk, so the
+    next request for it brings the session back."""
+    from test_webui import http   # noqa: WPS433 - same folder
+
+    with tempfile.TemporaryDirectory() as tmp:
+        app, server, base = start_server(tmp)
+        try:
+            s1 = app.create_session(tmp)
+            s2 = app.create_session(tmp)
+            app.store.append_item(s1.id, {"kind": "user", "text": "hello"})
+            app.store.append_item(s2.id, {"kind": "user", "text": "hello"})
+            workers = [t for t in threading.enumerate() if t.name.startswith("websession")]
+            assert len(workers) >= 2
+
+            # one of them has a page listening: it must be left alone
+            q, _ = s1.bus.subscribe_from(None)
+            retired = app.close_idle_sessions(idle_seconds=0)
+            assert retired == [s2.id], retired
+            assert app.get_session(s1.id) is s1 and app.get_session(s2.id) is None
+            s2._thread.join(5)
+            assert not s2._thread.is_alive(), "its worker stopped with it"
+            assert not s2.alive
+
+            # working, or holding a plan, is never retired
+            s3 = app.create_session(tmp)
+            s3.status = "working"
+            assert app.close_idle_sessions(idle_seconds=0) == []
+            s3.status = "idle"
+            s3._pending_plan = {"plan": "later"}
+            assert app.close_idle_sessions(idle_seconds=0) == []
+            s3._pending_plan = None
+
+            # not idle long enough: kept
+            s4 = app.create_session(tmp)
+            assert app.close_idle_sessions(idle_seconds=3600) == []
+            assert app.get_session(s4.id) is s4
+
+            # the retired one answers as if it had never gone: the page just asks for it
+            status, snap = http("GET", f"{base}/api/sessions/{s2.id}")
+            assert status == 200 and snap["id"] == s2.id, (status, snap)
+            assert app.get_session(s2.id) is not None
+            app.bus.emit("sessions", {})
+        finally:
+            server.shutdown()
+    print("PASS test_a_session_nobody_watches_is_let_go_and_comes_back")
+
+
 def test_page_files_are_compressed_and_cached():
     with tempfile.TemporaryDirectory() as tmp:
         app, server, base = start_server(tmp)
@@ -70,4 +120,5 @@ def test_page_files_are_compressed_and_cached():
 
 if __name__ == "__main__":
     test_unused_sessions_drop_out_and_opening_keeps_the_place()
+    test_a_session_nobody_watches_is_let_go_and_comes_back()
     test_page_files_are_compressed_and_cached()

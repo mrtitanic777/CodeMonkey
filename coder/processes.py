@@ -95,6 +95,17 @@ class ProcessManager:
         self.on_finish: Optional[Callable[[_Running], None]] = None
         atexit.register(self.stop_all)   # nothing outlives the program that started it
 
+    def close(self) -> None:
+        """Stop everything and forget this manager: the session that owned it has ended.
+
+        The atexit entry is dropped too. Without it every session that ever ran a background
+        command leaves one behind for the life of the app, and at exit they all run again over
+        programs that are already gone.
+        """
+        atexit.unregister(self.stop_all)
+        self.stop_all()
+        self.running.clear()
+
     def start(self, command: str, name: str = "", wait_for: str = "", wait_seconds: float = 20) -> str:
         command = str(command or "").strip()
         if not command:
