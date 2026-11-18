@@ -201,6 +201,13 @@ def is_local(base_url: str) -> bool:
     return urllib.parse.urlsplit(base_url or "").hostname in ("127.0.0.1", "localhost", "::1")
 
 
+#: Told to the model when the user sends a message while it works: the turn ends, the message is next.
+WRAP_UP_NOTE = (
+    "[The user has sent a new message and is waiting for it to be answered. Stop here: call no more tools. "
+    "In a sentence or two, say where things stand and what is still running in the background (you will be "
+    "told when it finishes). Their message is answered next.]")
+
+
 #: Added to what the model is sent (not to what the transcript shows) for a message said in a call.
 VOICE_NOTE = (
     "[Said aloud in a voice call; a voice reads your answer out. Talk the way a friendly person talks on "
@@ -698,6 +705,7 @@ class WebSession:
         if getattr(self, "processes", None) is not None:
             self.processes.stop_all()   # moving to another folder: what ran in the old one stops
         self.processes = ProcessManager(self.project_dir)
+        self.processes.on_finish = self._background_finished
         if getattr(self, "lsp", None) is not None:
             self.lsp.close()
         lsp_cfg = (self.config.coder or {}).get("lsp")
@@ -721,11 +729,15 @@ class WebSession:
                 except (TypeError, ValueError):
                     seconds = 60
                 self._detach.clear()
+                self._detach_why = "The user moved this command to the background"
                 self._bash_running = True
                 try:
-                    return self.processes.run_or_detach(cmd, seconds, self._detach)
+                    result = self.processes.run_or_detach(cmd, seconds, self._detach, lambda: self._detach_why)
                 finally:
                     self._bash_running = False
+                if getattr(self, "_wrap_up", False):
+                    result += "\n\n" + WRAP_UP_NOTE
+                return result
             bash.func = run_bash
         if os.path.normcase(self.project_dir) == os.path.normcase(_APP_ROOT):
             # working on CodeMonkey itself: the wiring checks the Settings button runs are a tool too
@@ -1056,6 +1068,9 @@ class WebSession:
                 gate_refusal = (f"ERROR: refused: you have made this exact {name} call {streak[2]} times in a row and "
                                 "got the same result each time. Do something different, or tell the user what is "
                                 "stopping you.")
+            if not gate_refusal and getattr(self, "_wrap_up", False):
+                # the user is waiting on a new message: this turn says where things stand and ends
+                gate_refusal = "Not run. " + WRAP_UP_NOTE
             if gate_refusal:
                 result = gate_refusal
             else:
@@ -1576,6 +1591,21 @@ class WebSession:
                 self._run_plan(text)
                 return
             self._run_message(text, item.get("attachments") or [], voice=bool(item.get("voice")))
+        elif kind == "background_done":
+            secs = int(item.get("seconds") or 0)
+            took = f"{secs // 60}m {secs % 60}s" if secs >= 60 else f"{secs}s"
+            ok = str(item.get("state")) == "exited with code 0"
+            note = f"Background command {item.get('name')} {'finished' if ok else str(item.get('state'))} ({took})"
+            text = (
+                "[Internal note, not a message from the user. A command you started, which was moved to the "
+                f"background as {item.get('name')!r}, has {item.get('state')} after {took}.]\n"
+                f"The command: {item.get('command')}\n"
+                f"Its last output:\n{item.get('output') or '(none)'}\n\n"
+                "Tell the user how it went, briefly: whether it worked, and what they need to know or do. If it "
+                "failed, say why from the output and what you would do next, but do not start on a fix unless "
+                "they asked for that before."
+            )
+            self._run_message(text, [], internal=note)
         elif kind == "handoff":
             # A helper's report. It is for the agent, not the user, and it is a report to
             # check, not an instruction to follow.
@@ -1699,6 +1729,19 @@ class WebSession:
     # ------------------------------------------------------ messages ---
 
     def enqueue_message(self, text: str, attachments: List[Dict], client_id: str = "", voice: bool = False) -> int:
+        position = self._enqueue_message(text, attachments, client_id, voice)
+        if position and self.status == "working" and getattr(self, "_bash_running", False) \
+                and not str(text).strip().startswith("/"):
+            # a new message while a command runs: the command carries on in the background, the turn
+            # wraps up, and the message is answered next; the agent is told when the command ends
+            self._detach_why = "The user sent a new message, so this command moved to the background"
+            self._wrap_up = True
+            self._detach.set()
+            self.bus.emit("notice", {"text": "The command that was running carries on in the background, so your "
+                                             "message can be answered. You'll hear when it finishes."})
+        return position
+
+    def _enqueue_message(self, text: str, attachments: List[Dict], client_id: str = "", voice: bool = False) -> int:
         """Queue a message. The same *client_id* twice is one message: a page on a flaky
         connection can send again without the agent hearing it twice. Returns 0 for a repeat."""
         if client_id:
@@ -1768,6 +1811,15 @@ class WebSession:
         else:
             raise ValueError("scope is project or user")
         return self.memory_files()
+
+    def _background_finished(self, run: Any) -> None:
+        """A command moved to the background ended by itself: the agent is told, and tells you.
+        It waits its turn behind anything already queued, like a message would."""
+        self.bus.emit("processes", {"items": self.processes.describe()})
+        lines = run.tail(40, False)
+        self.inbox.put({"kind": "background_done", "name": run.name, "command": run.command,
+                        "state": run.state(), "seconds": int((run.ended or time.time()) - run.started),
+                        "output": "\n".join(line[:400] for line in lines)})
 
     def to_background(self) -> bool:
         """Ctrl+B: the command running now carries on in the background; the agent goes on."""
@@ -2206,6 +2258,7 @@ class WebSession:
     ) -> None:
         self.status = "working"
         self._voice = voice and not internal
+        self._wrap_up = False   # set when a new message arrives while a command runs (enqueue_message)
         self._touch()
         shown = internal or display_as or text
         if self.title == "New session" and shown.strip() and not internal:

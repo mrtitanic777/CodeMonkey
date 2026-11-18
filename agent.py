@@ -29,7 +29,7 @@ import images
 from config import Config, resolve_model_endpoint, resolve_workspace
 from memory import MemoryManager
 from skills import Skill, load_skills, skill_search
-from tools import ToolRegistry, builtin_tools, make_delegate_tool
+from tools import ToolRegistry, builtin_tools, make_delegate_tool, parallel_safe
 
 MAX_DELEGATION_DEPTH = 1
 
@@ -540,6 +540,11 @@ class OpenAICompatClient(ModelClient):
             total["ttft_ms"] = ttft_ms
 
 
+def _tool_call_name(call: Dict) -> str:
+    """The tool name inside one OpenAI-style tool call."""
+    return (call.get("function") or {}).get("name", "")
+
+
 class AgentLoop:
     """Runs the tool-calling loop for one agent (or subagent)."""
 
@@ -594,6 +599,46 @@ class AgentLoop:
             )
             self.logger.addHandler(handler)
             self.logger.setLevel(logging.INFO)
+
+    # ------------------------------------------------------ tool calls ---
+
+    def _run_one_tool(self, call: Dict) -> str:
+        """Parse one tool call's arguments and execute it. Never raises."""
+        func = call.get("function", {}) or {}
+        name = func.get("name", "")
+        raw_args = func.get("arguments") or "{}"
+        try:
+            args = json.loads(raw_args)
+            if not isinstance(args, dict):
+                raise ValueError("arguments must be an object")
+        except (json.JSONDecodeError, ValueError) as exc:
+            return f"ERROR: invalid tool arguments: {exc}"
+        self.logger.info("tool call: %s %s", name, str(args)[:200])
+        return self.registry.execute(name, args)
+
+    def _run_tools_parallel(self, calls: List[Dict]) -> List[str]:
+        """Run parallel-safe calls on a small thread pool, results in call order.
+
+        Each worker goes through the full registry stack (hooks, approval
+        gate, condensing), exactly as the sequential path does; only the
+        execution overlaps. A worker that still raises (a hook, or a tool
+        ignoring its read_only promise) becomes an ERROR string so one bad
+        call never loses its siblings' results.
+        """
+        from concurrent.futures import ThreadPoolExecutor
+
+        def guard(call: Dict) -> str:
+            try:
+                return self._run_one_tool(call)
+            except Exception as exc:  # noqa: BLE001 - surfaced to the model
+                name = (call.get("function") or {}).get("name", "")
+                self.logger.error("parallel tool %r failed: %s", name, exc)
+                return f"ERROR: tool {name!r} failed: {type(exc).__name__}: {exc}"
+
+        if len(calls) == 1:
+            return [guard(calls[0])]
+        with ThreadPoolExecutor(max_workers=min(4, len(calls))) as pool:
+            return list(pool.map(guard, calls))
 
     # ---------------------------------------------------------- prompt ---
 
@@ -712,30 +757,37 @@ class AgentLoop:
                 return text
 
             shown: List[Dict] = []
-            for call in tool_calls:
-                call_id = call.get("id", "")
-                func = call.get("function", {}) or {}
-                name = func.get("name", "")
-                raw_args = func.get("arguments") or "{}"
-                try:
-                    args = json.loads(raw_args)
-                    if not isinstance(args, dict):
-                        raise ValueError("arguments must be an object")
-                except (json.JSONDecodeError, ValueError) as exc:
-                    result = f"ERROR: invalid tool arguments: {exc}"
+            index = 0
+            while index < len(tool_calls):
+                # Maximal run of consecutive parallel-safe (read-only) calls
+                # goes out together on a thread pool; they touch nothing, so
+                # the overlap is safe. Everything else runs strictly one at
+                # a time: side effects in order, one approval prompt at once.
+                name = _tool_call_name(tool_calls[index])
+                if parallel_safe(self.registry, name):
+                    end = index
+                    while (end < len(tool_calls)
+                           and parallel_safe(self.registry,
+                                             _tool_call_name(tool_calls[end]))):
+                        end += 1
+                    batch = tool_calls[index:end]
+                    pairs = list(zip(batch, self._run_tools_parallel(batch)))
+                    index = end
                 else:
-                    self.logger.info("tool call: %s %s", name, str(args)[:200])
-                    result = self.registry.execute(name, args)
-                result, parts = images.extract(result, self.sees_images())
-                shown.extend(parts)
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": call_id,
-                        "name": name,
-                        "content": result,
-                    }
-                )
+                    call = tool_calls[index]
+                    pairs = [(call, self._run_one_tool(call))]
+                    index += 1
+                for call, result in pairs:
+                    result, parts = images.extract(result, self.sees_images())
+                    shown.extend(parts)
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": call.get("id", ""),
+                            "name": _tool_call_name(call),
+                            "content": result,
+                        }
+                    )
             if shown:
                 messages.append({"role": "user", "content": [
                     {"type": "text", "text": "The image" + ("s" if len(shown) > 1 else "") + " from the tool results above:"}

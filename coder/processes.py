@@ -14,7 +14,7 @@ import collections
 import re
 import threading
 import time
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 import procutil
 
@@ -28,6 +28,8 @@ class _Running:
     def __init__(self, name: str, command: str, proc) -> None:
         self.name, self.command, self.proc = name, command, proc
         self.started = time.time()
+        self.ended: Optional[float] = None
+        self.stopped = False     # stopped on purpose (process_stop): nobody needs telling it ended
         self.lines: "collections.deque[str]" = collections.deque(maxlen=KEEP_LINES)
         self.total = 0           # lines seen in all, so a reader can ask for what is new
         self.read_to = 0         # where the agent last read up to
@@ -89,6 +91,8 @@ class ProcessManager:
         self.project_dir = project_dir
         self.running: Dict[str, _Running] = {}
         self._lock = threading.Lock()
+        #: called with a command moved to the background once it ends by itself, so the session can say so
+        self.on_finish: Optional[Callable[[_Running], None]] = None
         atexit.register(self.stop_all)   # nothing outlives the program that started it
 
     def start(self, command: str, name: str = "", wait_for: str = "", wait_seconds: float = 20) -> str:
@@ -134,9 +138,11 @@ class ProcessManager:
         time.sleep(1.5)   # what it says in its first moment is usually what matters
         return head + "\n" + self._show(run, 30, True)
 
-    def run_or_detach(self, command: str, timeout: float, detach: threading.Event) -> str:
+    def run_or_detach(self, command: str, timeout: float, detach: threading.Event,
+                      why: Callable[[], str] = lambda: "The user moved this command to the background") -> str:
         """Run a shell command and wait for it, like bash, unless *detach* is set while it runs
-        (Ctrl+B): then it keeps running here as a background program and the wait ends."""
+        (Ctrl+B, or a new message from the user): then it keeps running here as a background
+        program, the wait ends, and on_finish is called when it ends by itself."""
         from coder import sandbox
 
         lvl = sandbox.level()
@@ -157,9 +163,11 @@ class ProcessManager:
                     n = 1 + sum(1 for k in self.running if k.startswith("bash-"))
                     run.name = f"bash-{n}"
                     self.running[run.name] = run
-                return (f"The user moved this command to the background as {run.name!r}; it is still running.\n"
+                threading.Thread(target=self._watch, args=(run,), name=f"watch-{run.name}", daemon=True).start()
+                return (f"{why()} as {run.name!r}; it is still running.\n"
                         + self._show(run, 30, True)
-                        + f"\nRead more with process_logs(name={run.name!r}); stop it with process_stop.")
+                        + f"\nYou will be told when it finishes. Read more with process_logs(name={run.name!r}); "
+                        "stop it with process_stop.")
             if time.monotonic() > deadline:
                 procutil.stop_tree(proc)
                 return f"ERROR: command timed out after {timeout:.0f}s and was stopped: {command[:200]}"
@@ -169,6 +177,17 @@ class ProcessManager:
         from coder.tools import _truncate
 
         return f"[exit {proc.returncode}]\n" + _truncate(out)
+
+    def _watch(self, run: _Running) -> None:
+        """Wait for a command moved to the background to end, then say so (unless it was stopped)."""
+        run.proc.wait()
+        run.ended = time.time()
+        run.reader.join(5)   # its last lines
+        if not run.stopped and self.on_finish is not None:
+            try:
+                self.on_finish(run)
+            except Exception:  # noqa: BLE001 - the program ended either way
+                pass
 
     def describe(self) -> List[Dict[str, object]]:
         """What runs in the background, for the page."""
@@ -195,6 +214,7 @@ class ProcessManager:
         if run is None:
             return self._unknown(name)
         was = run.state()
+        run.stopped = True
         procutil.stop_tree(run.proc)
         try:
             run.proc.wait(timeout=5)

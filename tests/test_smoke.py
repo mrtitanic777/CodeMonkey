@@ -39,6 +39,8 @@ class FakeClient:
 
     def chat(self, messages, tools):
         self.calls += 1
+        # a copy of what the loop had built by this request (for assertions)
+        self.seen_messages = list(messages)
         assert self.script, "FakeClient ran out of scripted responses"
         return self.script.pop(0)
 
@@ -281,6 +283,129 @@ def test_agent_recovers_from_tool_error():
     print("PASS test_agent_recovers_from_tool_error")
 
 
+def test_parallel_read_only_calls_run_together():
+    """Consecutive read-only tool calls overlap; results stay in call order."""
+    import threading
+
+    with tempfile.TemporaryDirectory() as tmp:
+        barrier = threading.Barrier(2, timeout=5)
+
+        def echo(text):
+            # Only passes if both calls are inside the tool at once; a
+            # sequential loop would hit the barrier's timeout and fail.
+            barrier.wait()
+            return f"echo:{text}"
+
+        reg = ToolRegistry(auto_approve=True)
+        reg.register(
+            Tool(
+                name="echo",
+                description="Echoes text.",
+                parameters={
+                    "type": "object",
+                    "properties": {"text": {"type": "string"}},
+                },
+                func=echo,
+                read_only=True,
+            )
+        )
+        msg = {
+            "choices": [{"message": {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {"id": "c1", "type": "function", "function": {
+                        "name": "echo", "arguments": json.dumps({"text": "one"})}},
+                    {"id": "c2", "type": "function", "function": {
+                        "name": "echo", "arguments": json.dumps({"text": "two"})}},
+                ],
+            }}]
+        }
+        client = FakeClient([msg, text_msg("done")])
+        agent = AgentLoop(config=make_config(tmp), registry=reg,
+                          client=client, skills=[])
+        reply = agent.run("run both")
+        assert reply == "done", reply
+        # results in the order the model asked for, not completion order
+        tool_msgs = [m for m in _captured_messages(agent, client)
+                     if m.get("role") == "tool"]
+        assert [m["tool_call_id"] for m in tool_msgs] == ["c1", "c2"], tool_msgs
+        assert [m["content"] for m in tool_msgs] == ["echo:one", "echo:two"], tool_msgs
+
+        # a non-read-only call between two read-only ones splits the batch:
+        # order preserved, no overlap required (barrier would time out)
+        reg2 = ToolRegistry(auto_approve=True)
+        reg2.register(Tool(name="echo", description="", parameters={
+            "type": "object", "properties": {}}, func=lambda text: f"e:{text}",
+            read_only=True))
+        reg2.register(Tool(name="act", description="", parameters={
+            "type": "object", "properties": {}}, func=lambda: "acted"))
+        msg2 = {"choices": [{"message": {
+            "role": "assistant", "content": None, "tool_calls": [
+                {"id": "a1", "type": "function", "function": {
+                    "name": "echo", "arguments": json.dumps({"text": "x"})}},
+                {"id": "a2", "type": "function", "function": {
+                    "name": "act", "arguments": "{}"}},
+                {"id": "a3", "type": "function", "function": {
+                    "name": "echo", "arguments": json.dumps({"text": "y"})}},
+            ]}}]}
+        client2 = FakeClient([msg2, text_msg("ok")])
+        agent2 = AgentLoop(config=make_config(tmp), registry=reg2,
+                           client=client2, skills=[])
+        assert agent2.run("mix them") == "ok"
+        msgs2 = [m for m in _captured_messages(agent2, client2)
+                 if m.get("role") == "tool"]
+        assert [(m["tool_call_id"], m["content"]) for m in msgs2] == [
+            ("a1", "e:x"), ("a2", "acted"), ("a3", "e:y")], msgs2
+    print("PASS test_parallel_read_only_calls_run_together")
+
+
+def _captured_messages(agent, client):
+    """The message list the loop had built as of the client's last request."""
+    return client.seen_messages
+
+
+def test_parallel_safe_gate():
+    """parallel_safe is the loop's only say-so on overlapping calls:
+    read_only tools yes; unknown tools, PARALLEL_NEVER names, and any
+    wrapper layer that lacks read_only no."""
+    from tools import parallel_safe
+
+    reg = ToolRegistry(auto_approve=True)
+    reg.register(Tool(name="look", description="", parameters={},
+                      func=lambda: "x", read_only=True))
+    reg.register(Tool(name="touch", description="", parameters={},
+                      func=lambda: "x"))
+    assert parallel_safe(reg, "look") is True
+    assert parallel_safe(reg, "touch") is False
+    assert parallel_safe(reg, "nope") is False
+
+    # a wrapper layer must agree: its own tool table decides too, and it can
+    # veto with PARALLEL_NEVER even though the inner layer allows the call
+    class Wrapper(ToolRegistry):
+        def __init__(self, inner, never=()):
+            super().__init__(auto_approve=inner.auto_approve)
+            self.tools = dict(inner.tools)
+            self._inner = inner
+            if never:
+                self.PARALLEL_NEVER = set(never)
+
+    inner = reg
+    w = Wrapper(inner)
+    assert parallel_safe(w, "look") is True
+    w2 = Wrapper(inner, never={"look"})
+    assert parallel_safe(w2, "look") is False
+    assert parallel_safe(w2, "touch") is False
+
+    # a wrapper whose table lost the flag (registered without read_only)
+    # vetoes by itself: every layer must say so
+    w3 = Wrapper(inner)
+    w3.tools["look"] = Tool(name="look", description="", parameters={},
+                            func=lambda: "x")
+    assert parallel_safe(w3, "look") is False
+    print("PASS test_parallel_safe_gate")
+
+
 def test_agent_max_iterations_guard():
     with tempfile.TemporaryDirectory() as tmp:
         reg = ToolRegistry(auto_approve=True)
@@ -370,6 +495,8 @@ def main():
         test_memory,
         test_agent_tool_loop,
         test_agent_recovers_from_tool_error,
+        test_parallel_read_only_calls_run_together,
+        test_parallel_safe_gate,
         test_agent_max_iterations_guard,
         test_delegate_tool_registered_once,
         test_cron_parser,

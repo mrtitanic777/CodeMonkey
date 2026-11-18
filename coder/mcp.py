@@ -726,6 +726,7 @@ def server_tools(client: MCPClient, cfg: Dict[str, Any], entries: List[Dict[str,
             # MCP tools can do anything the server allows; gate them, except
             # the ones the user has reviewed and listed as read-only.
             needs_approval=not read_only,
+            read_only=read_only,
         ))
     return out
 

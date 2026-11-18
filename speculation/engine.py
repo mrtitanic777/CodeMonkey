@@ -23,6 +23,7 @@ the approval gate, and never enter the case trace.
 from __future__ import annotations
 
 import json
+import threading
 from typing import Any, Dict, List, Optional
 
 from tools.registry import ToolRegistry
@@ -173,6 +174,15 @@ class SpeculativeRegistry(ToolRegistry):
         self.project_dir = project_dir
         self.cache_max_entries = max(1, int(cache_max_entries))
         self._cache: Dict[str, str] = {}
+        # The agent loop may run several read-only calls through this layer
+        # at once (agent.py's parallel batch): consume-once pops, the miss
+        # invalidate and the stats counters all need serialising.
+        self._lock = threading.Lock()
+        # tools/registry.py's parallel_safe honours this: a cache hit skips
+        # every inner layer (no hooks, no approval gate, nothing recorded),
+        # so until its correctness under concurrent calls is proven, calls
+        # that may hit the prefetch cache run strictly one at a time.
+        self.PARALLEL_NEVER = SAFE_TOOLS
         self._stats = {
             "hits": 0,
             "misses": 0,
@@ -218,15 +228,25 @@ class SpeculativeRegistry(ToolRegistry):
         """Run a tool, serving an exact-match prefetched result on a hit."""
         if self.enabled:
             key = _cache_key(name, arguments)
-            if key in self._cache:
-                result = self._cache.pop(key)  # consume-once: never serve twice
-                self._stats["hits"] += 1
+            # The pop and the miss-invalidate are one decision under the
+            # lock: two concurrent calls must never both serve one cached
+            # result, and a miss must not discard a hit taken a moment ago.
+            # (PARALLEL_NEVER keeps read/glob/grep sequential today; the
+            # lock is the guarantee for whenever that is relaxed.)
+            with self._lock:
+                if key in self._cache:
+                    result = self._cache.pop(key)  # consume-once: never serve twice
+                    self._stats["hits"] += 1
+                    hit = True
+                else:
+                    # A miss means the model's actual next action diverged
+                    # from every prediction: the lookahead is stale, discard.
+                    self._invalidate("prediction miss")
+                    self._stats["misses"] += 1
+                    hit = False
+            if hit:
                 self._prefetch_after(name, arguments, result)
                 return result
-            # A miss means the model's actual next action diverged from
-            # every prediction: the whole lookahead is stale, discard it.
-            self._invalidate("prediction miss")
-            self._stats["misses"] += 1
         result = self._inner.execute(name, arguments)
         if self.enabled:
             if name not in SAFE_TOOLS:

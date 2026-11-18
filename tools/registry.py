@@ -29,6 +29,10 @@ class Tool:
     parameters: Dict[str, Any]
     func: Callable[..., str]
     needs_approval: bool = False
+    # Safe to run concurrently with other read_only tools (no writes, no
+    # approval prompt). The agent loop runs consecutive read_only calls in
+    # parallel; anything else stays strictly sequential.
+    read_only: bool = False
     preview: Optional[Callable[[Dict[str, Any]], str]] = None
 
     def schema(self) -> Dict[str, Any]:
@@ -80,6 +84,29 @@ def _innermost_registry(registry):
             return registry
         registry = inner
     return registry
+
+
+def parallel_safe(registry, name: str) -> bool:
+    """True when a tool call may run concurrently with other parallel-safe calls.
+
+    A tool runs in parallel only when *every* layer of the registry stack
+    says so: the Tool's own ``read_only`` flag, checked on each layer's
+    copy of the tool table (wrappers hold their own dict; MCP tools are
+    registered on every layer), and no wrapper overriding the decision
+    with a per-layer ``PARALLEL_NEVER`` set (e.g. a speculation wrapper's
+    cache-hit path). Unknown tools are not parallel.
+    """
+    seen = set()
+    layer = registry
+    while layer is not None and id(layer) not in seen:
+        seen.add(id(layer))
+        if name in getattr(layer, "PARALLEL_NEVER", ()):
+            return False
+        tool = layer.tools.get(name) if getattr(layer, "tools", None) else None
+        if tool is None or not getattr(tool, "read_only", False):
+            return False
+        layer = getattr(layer, "_inner", None)
+    return True
 
 
 class ToolRegistry:

@@ -284,6 +284,169 @@ def _glob(pattern: str, project_dir: str = ".") -> str:
 # ---------------------------------------------------------------- grep ---
 
 
+def _rg_exe() -> Optional[str]:
+    """The ripgrep binary once found, else None (checked a single time)."""
+    global _RG_EXE
+    if _RG_EXE is None:
+        import shutil
+
+        _RG_EXE = shutil.which("rg") or False
+    return _RG_EXE or None
+
+
+_RG_EXE: Optional[str] = None  # None: not looked up yet; False: looked up, absent
+
+
+def _grep_rg(rx, pattern: str, start: str, context: int,
+             project_dir: str, patterns: List[str]):
+    """-> (lines, walked). lines is None when the caller must fall back and
+    walk itself; an empty list means rg found no matches. walked lists every
+    file rg could search (our walk filtered to `start`), so a fallback after
+    a capped result reuses it instead of walking twice."""
+    """Search with ripgrep when installed. The output lines are built by the
+    same formatter as the Python path, so the two backends agree byte for
+    byte; rg only walks and matches faster.
+
+    Returns None when rg is absent, refuses the pattern (exit >= 2: a regex
+    dialect difference), or fails outright — the caller then falls back to
+    the Python walk, including its gitignore semantics.
+    """
+    exe = _rg_exe()
+    if exe is None:
+        return None, None
+    import subprocess
+
+    # (The Python path skips files _looks_binary calls binary; the match
+    # loop below drops rg's events for those same files.)
+
+    rel = _rel(project_dir, os.path.abspath(start)) or "."
+    argv = [exe, "--json", "--ignore-case" if os.path.normcase("A") == "a" else "-s"]
+    # rg matches a path against each -g glob with --no-ignore; our _is_ignored
+    # tests the whole posix path and every folder along it, prunes folders, and
+    # always skips .git/__pycache__/.venv/venv/node_modules. The same decisions
+    # as globs: "**/<name>/**" ignores a folder of that name anywhere with
+    # everything under it; an anchored pattern is relative to the searched
+    # folder, which is `rel`, not to rg's working directory.
+    for pat in patterns:
+        p = pat.strip().rstrip("/")
+        if not p or p.startswith("!"):
+            continue
+        dir_only = pat.endswith("/")
+        anchored = "/" in p.rstrip("/")
+        prelude = (rel + "/") if rel != "." and anchored else ""
+        body = p.replace("\\", "/")
+        if anchored:
+            # the pattern itself, and every folder along it, so rg never
+            # descends into an ignored folder (_is_ignored's folder test)
+            argv += ["-g", "!" + prelude + body]
+            if dir_only:
+                argv += ["-g", f"!{prelude}{body}/**"]
+            parts = body.split("/")
+            for k in range(1, len(parts)):
+                argv += ["-g", "!" + prelude + "/".join(parts[:k]) + "/**"]
+        elif dir_only:
+            argv += ["-g", f"!**/{body}/**", "-g", f"!{body}/**"]
+        else:
+            # a plain name or glob matches a file *or a folder* anywhere
+            argv += ["-g", f"!{prelude}{body}", "-g", f"!**/{body}/**"]
+    for skip in sorted(_ALWAYS_SKIP_DIRS):
+        argv += ["-g", f"!{skip}", "-g", f"!**/{skip}", "-g", f"!**/{skip}/**"]
+    # rg's own defaults would skip things this tool searches (hidden files,
+    # folders not in .gitignore here).
+    argv += ["--hidden", "--no-ignore", "--"]
+    argv += [pattern, start]
+    try:
+        # bytes mode: rg reads and emits raw bytes; decoding as UTF-8 with
+        # replacement mirrors the Python path's open(errors="replace").
+        proc = subprocess.run(argv, capture_output=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return None, None
+    if proc.returncode >= 2:
+        # a regex dialect difference or rg error: fall back to the Python path.
+        # (exit 1 simply means no matches; the caller says so in our words.)
+        return None, None
+    stdout = proc.stdout.decode("utf-8", errors="replace")
+    if not stdout:
+        # rg searched and found nothing: no matches either way, and the
+        # caller returns without walking.
+        return [], None
+    out: List[str] = []
+    lines_by_file: Dict[str, List[str]] = {}
+    total = 0
+    pending: List[tuple] = []  # context lines not emitted until the cap is known
+    # rg walks its own way (parallel, folder stack); the Python path emits
+    # matches in sorted-file then line order. Sort the events to match.
+    events = []
+    for raw in stdout.splitlines():
+        if not raw.startswith("{"):
+            continue
+        try:
+            event = json.loads(raw)
+        except ValueError:
+            continue
+        if event.get("type") == "match":
+            fp = ((event.get("data") or {}).get("path") or {}).get("text") or ""
+            if fp and _looks_binary(os.path.abspath(fp.replace("/", os.sep))):
+                continue  # the Python path would not have opened this file
+            events.append(event)
+    # What rg searched, as the Python path would have listed it: every file
+    # under `start` that our gitignore rules keep. A binary file holds no
+    # match so rg never reports it, but the fallback walk must still see it
+    # in the set (and then skip opening it), so take the names from our own
+    # walk filtered to what rg was pointed at, not from its events.
+    abs_start = os.path.abspath(start)
+    walked_files = [
+        abs_p
+        for abs_p, _relp in _walk_files(project_dir, patterns)
+        if abs_p == abs_start or abs_p.startswith(abs_start + os.sep)
+    ]
+    events.sort(key=lambda e: (
+        ((e.get("data") or {}).get("path") or {}).get("text") or "",
+        int((e.get("data") or {}).get("line_number") or 0),
+    ))
+    # rel -> line index the Python path's single regex scan has reached in
+    # that file (it resumes right after the last match it found).
+    cursor: Dict[str, int] = {}
+    for event in events:
+        data = event.get("data") or {}
+        file_part = ((data.get("path") or {}).get("text") or "").replace("/", os.sep)
+        i = int(data.get("line_number") or 0) - 1
+        if i < 0:
+            continue
+        rel = _rel(project_dir, os.path.abspath(file_part))
+        lines = lines_by_file.get(rel)
+        if lines is None:
+            try:
+                with open(file_part, "r", encoding="utf-8", errors="replace") as fh:
+                    lines = fh.read().splitlines()
+            except OSError:
+                continue
+            lines_by_file[rel] = lines
+        # The Python path scans each file with one regex cursor that resumes
+        # after the previous match's *line*: a match at or before that cursor
+        # was never found by it, and its context lines were already printed.
+        if i < cursor.get(rel, 0):
+            continue
+        total += 1
+        if total > _GREP_MAX_MATCHES:
+            # What the Python path holds when it returns at the cap: every
+            # line up to this match's block, then the stop line.
+            out.extend(
+                f"{r}{m2}{ln + 1}{m2}{lines_by_file[r][ln][:300]}"
+                for r, m2, ln in pending
+            )
+            out.append(f"... [stopped after {_GREP_MAX_MATCHES} matches]")
+            return out, walked_files
+        lo = max(0, i - context)
+        hi = min(len(lines), i + context + 1)
+        for j in range(lo, hi):
+            mark = ":" if j == i else "-"
+            pending.append((rel, mark, j))
+        cursor[rel] = i + 1
+    out.extend(f"{r}{m}{ln + 1}{m}{lines_by_file[r][ln][:300]}" for r, m, ln in pending)
+    return out, walked_files
+
+
 def _grep(
     pattern: str,
     path: str = ".",
@@ -296,18 +459,36 @@ def _grep(
         return f"ERROR: invalid regex {pattern!r}: {exc}"
     start = _resolve_project(project_dir, path)
     patterns = _load_gitignore(project_dir)
+    context = max(0, int(context))
+    rg_out: Optional[List[str]] = None
+    walked: Optional[List[str]] = None
+    if os.path.isdir(start):
+        # Fast path: ripgrep, when installed and it accepts the pattern. It
+        # also hands back the files it searched; a fallback then filters that
+        # list instead of walking the tree again in Python. (rg runs only for
+        # whole directories: its ignore rules approximate ours there, while a
+        # grep of one explicit file always uses the Python path.)
+        rg_out, walked = _grep_rg(rx, pattern, start, context, project_dir, patterns)
+        if rg_out is not None:
+            if not rg_out:
+                return f"(no matches for {pattern!r})"
+            return _truncate(chr(10).join(rg_out))
     files: List[str] = []
     if os.path.isfile(start):
         files = [start]
     elif os.path.isdir(start):
-        files = [
-            abs_p
-            for abs_p, _ in _walk_files(project_dir, patterns)
-            if abs_p == start or abs_p.startswith(start + os.sep)
-        ]
+        if walked is not None:
+            # rg saw this set already; it searched every file our walk would
+            # (its -g globs mirror _is_ignored and the always-skip folders).
+            files = list(walked)
+        else:
+            files = [
+                abs_p
+                for abs_p, _ in _walk_files(project_dir, patterns)
+                if abs_p == start or abs_p.startswith(start + os.sep)
+            ]
     else:
         return f"ERROR: path not found: {path!r}"
-    context = max(0, int(context))
     out: List[str] = []
     total = 0
     for abs_p in sorted(files):
@@ -660,6 +841,7 @@ def coder_tools(
             func=lambda path, offset=1, limit=200: _read(
                 path, offset, limit, project_dir
             ),
+            read_only=True,
         ),
         Tool(
             name="glob",
@@ -675,6 +857,7 @@ def coder_tools(
                 "required": ["pattern"],
             },
             func=lambda pattern: _glob(pattern, project_dir),
+            read_only=True,
         ),
         Tool(
             name="grep",
@@ -695,6 +878,7 @@ def coder_tools(
             func=lambda pattern, path=".", context=0: _grep(
                 pattern, path, context, project_dir
             ),
+            read_only=True,
         ),
         Tool(
             name="todo_write",
@@ -737,6 +921,7 @@ def coder_tools(
                          "lines changed in each since the last commit."),
             parameters={"type": "object", "properties": {}},
             func=lambda: _git_status(project_dir),
+            read_only=True,
         ),
         Tool(
             name="git_diff",
@@ -750,6 +935,7 @@ def coder_tools(
                 },
             },
             func=lambda path="", staged=False: _git_diff(project_dir, path, staged),
+            read_only=True,
         ),
     ])
     if plan_mode:
@@ -921,6 +1107,7 @@ def _process_tools(project_dir: str, processes: Any = None) -> List[Tool]:
             description="The background programs started in this session and whether they are running.",
             parameters={"type": "object", "properties": {}},
             func=lambda: procs.listing(),
+            read_only=True,
         ),
         Tool(
             name="test_focus",

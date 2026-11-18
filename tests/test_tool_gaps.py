@@ -127,6 +127,72 @@ def test_web_sessions_recall_similar_cases_and_doctor_is_offered_at_home():
     print("PASS test_web_sessions_recall_similar_cases_and_doctor_is_offered_at_home")
 
 
+def test_grep_matches_the_python_walk_whether_rg_is_there_or_not():
+    """The ripgrep backend, when installed, must agree with the Python walk
+    line for line: same files (gitignore semantics), same order, same match
+    cap. rg is simulated with a fake that answers exactly as rg would."""
+    import json as _json
+    import pathlib as _pathlib
+    import re as _re
+    import subprocess as _sp
+    from coder import tools as ct
+
+    NL = chr(10)
+    with tempfile.TemporaryDirectory() as tmp:
+        os.mkdir(os.path.join(tmp, "src"))
+        os.mkdir(os.path.join(tmp, "build"))
+        _pathlib.Path(tmp, ".gitignore").write_text("build/" + NL + "secrets.txt" + NL, encoding="utf-8")
+        _pathlib.Path(tmp, ".hidden").write_text("needle hidden" + NL, encoding="utf-8")
+        _pathlib.Path(tmp, "a.py").write_text("needle one" + NL + "needle two" + NL, encoding="utf-8")
+        _pathlib.Path(tmp, "src", "b.txt").write_text("x" + NL + "needle three" + NL + "y" + NL, encoding="utf-8")
+        _pathlib.Path(tmp, "build", "skip.txt").write_text("needle in build" + NL, encoding="utf-8")
+        _pathlib.Path(tmp, "secrets.txt").write_text("needle secret" + NL, encoding="utf-8")
+
+        python_out = ct._grep("needle", tmp, 1, tmp)   # the Python walk
+
+        def fake_events(pattern, start):
+            rx = _re.compile(pattern)
+            evs = []
+            for abs_p, rel in ct._walk_files(tmp, ct._load_gitignore(tmp)):
+                if not (abs_p == start or abs_p.startswith(start + os.sep)):
+                    continue
+                try:
+                    lines = open(abs_p, encoding="utf-8", errors="replace").read().splitlines()
+                except OSError:
+                    continue
+                for i2, ln in enumerate(lines):
+                    if rx.search(ln):
+                        evs.append({"type": "match", "data": {
+                            "path": {"text": abs_p.replace(os.sep, "/")},
+                            "lines": {"text": ln + NL},
+                            "line_number": i2 + 1}})
+            return (NL.join(_json.dumps(e) for e in evs)).encode()
+
+        real_rg, real_run = ct._rg_exe, _sp.run
+        calls = []
+        try:
+            ct._rg_exe = lambda: "rg"
+            def fake_run(argv, **kw):
+                calls.append(argv)
+                class P: returncode, stdout, stderr = 0, fake_events(argv[-2], argv[-1]), b""
+                return P()
+            _sp.run = fake_run
+            rg_out = ct._grep("needle", tmp, 1, tmp)
+        finally:
+            ct._rg_exe, _sp.run = real_rg, real_run
+
+        assert calls, "the rg path never ran"
+        argv = calls[0]
+        globs = [argv[i3 + 1] for i3, a in enumerate(argv) if a == "-g"]
+        assert "--no-ignore" in argv and "--hidden" in argv
+        assert "!**/build/**" in globs or "!build/**" in globs, globs
+        assert "!secrets.txt" in globs or "!**/secrets.txt" in globs, globs
+        assert rg_out == python_out, (rg_out, python_out)
+        assert "needle secret" not in rg_out and "needle in build" not in rg_out
+        assert ".hidden" in rg_out  # hidden files are searched either way
+    print("PASS test_grep_matches_the_python_walk_whether_rg_is_there_or_not")
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):
