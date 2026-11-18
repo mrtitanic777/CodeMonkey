@@ -48,7 +48,13 @@ class Tool:
 
 
 def _known_arguments(func: Callable[..., Any], arguments: Dict[str, Any]):
-    """(the arguments *func* takes, the names of the others). A function with **kwargs takes all."""
+    """(the arguments *func* takes, the names of the others). A function with **kwargs takes all.
+
+    Only *unknown* names are dropped. A parameter the model left out is kept only when it
+    has a default or is otherwise optional: dropping a required one is what made
+    ``bash`` report "missing 1 required positional argument: 'cmd'" when a call sent
+    just ``timeout``, since the filter kept only the names that were present.
+    """
     import inspect
 
     try:
@@ -58,6 +64,13 @@ def _known_arguments(func: Callable[..., Any], arguments: Dict[str, Any]):
     if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
         return arguments, []
     known = {k: v for k, v in (arguments or {}).items() if k in params}
+    for name, p in params.items():
+        if name in known or p.kind is inspect.Parameter.VAR_POSITIONAL:
+            continue
+        # A required parameter with no default may only come from the model, so it stays
+        # out unless sent (the line above). Every other parameter takes its own default.
+        if p.default is not inspect.Parameter.empty:
+            known[name] = p.default
     return known, sorted(k for k in (arguments or {}) if k not in params)
 
 
