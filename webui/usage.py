@@ -7,8 +7,16 @@ from __future__ import annotations
 
 import datetime
 import json
+import os
 import threading
 from typing import Any, Dict, List
+
+
+#: summary() only ever reads the last 14 days, so older lines are dead weight: the file is
+#: rewritten without them once it grows past this. (One line per finished turn, so a heavy day
+#: is a few hundred lines; 256 KB is months of work.)
+MAX_BYTES = 256 * 1024
+KEEP_DAYS = 14
 
 
 class UsageLog:
@@ -27,6 +35,35 @@ class UsageLog:
         with self._lock:
             with open(self.path, "a", encoding="utf-8") as fh:
                 fh.write(json.dumps(record) + "\n")
+            try:
+                if os.path.getsize(self.path) > MAX_BYTES:
+                    self._keep_recent()
+            except OSError:
+                pass
+
+    def _keep_recent(self) -> None:
+        """Rewrite the log with only the last KEEP_DAYS days (call holding the lock)."""
+        cutoff = (datetime.date.today() - datetime.timedelta(days=KEEP_DAYS)).isoformat()
+        kept = []
+        try:
+            with open(self.path, "r", encoding="utf-8") as fh:
+                lines = fh.readlines()
+        except OSError:
+            return
+        for line in lines:
+            try:
+                day = str(json.loads(line).get("ts", ""))[:10]
+            except ValueError:
+                continue   # a corrupt line is dropped rather than breaking the rewrite
+            if day >= cutoff:
+                kept.append(line)
+        tmp = self.path + ".tmp"
+        try:
+            with open(tmp, "w", encoding="utf-8") as fh:
+                fh.writelines(kept)
+            os.replace(tmp, self.path)
+        except OSError:
+            pass
 
     def _records(self) -> List[Dict[str, Any]]:
         records: List[Dict[str, Any]] = []

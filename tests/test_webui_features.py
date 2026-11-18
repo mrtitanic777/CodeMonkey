@@ -3884,6 +3884,27 @@ def test_usage_has_every_one_of_the_last_14_days():
         assert all(d["in"] == 0 for d in days[:-1]), "a quiet day is a zero, not a gap"
 
 
+def test_the_usage_log_keeps_only_the_days_anything_reads():
+    """summary() only reads the last 14 days, so older lines are dead weight: past the size cap
+    the log is rewritten without them, and the numbers for the days that matter do not move."""
+    import datetime
+
+    from webui.usage import MAX_BYTES, UsageLog
+
+    with tempfile.TemporaryDirectory() as tmp:
+        log = UsageLog(os.path.join(tmp, "usage.jsonl"))
+        old = (datetime.date.today() - datetime.timedelta(days=400)).isoformat()
+        with open(log.path, "w", encoding="utf-8") as fh:
+            for i in range(4000):    # a year of turns, all from long ago
+                fh.write(__import__("json").dumps(
+                    {"ts": f"{old}T10:{i % 60:02d}:00", "model": "m", "in": 1000, "out": 200, "ms": 500}) + "\n")
+        assert os.path.getsize(log.path) > MAX_BYTES
+        log.add("m", 1000, 200, 500)
+        assert os.path.getsize(log.path) <= MAX_BYTES, "the old lines are gone"
+        s = log.summary({})
+        assert s["today"]["tasks"] == 1 and s["today"]["in"] == 1000, s
+
+
 def test_thinking_is_shown_and_kept_apart_from_the_answer():
     with tempfile.TemporaryDirectory() as tmp:
         app, server, base = start_server(tmp)
