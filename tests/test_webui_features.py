@@ -3166,6 +3166,32 @@ def _read_stream(url, want, timeout=8, headers=None):
     return events
 
 
+def test_an_event_is_serialised_once_for_every_page():
+    """Several pages watching one session get the same event, so it is turned into bytes once
+    and shared, and an event nobody is watching is never serialised at all."""
+    from webui.events import EventBus, frame_of
+
+    bus = EventBus()
+    quiet = bus.emit("notice", {"text": "no page will ever see this"})   # no subscribers
+    assert "frame" not in bus._recent[-1], "encoding waited for a reader that never came"
+
+    pages = [bus.subscribe() for _ in range(3)]
+    bus.emit("token", {"text": "hello", "final": False}, transient=True)
+    frames = [frame_of(pages[i].get_nowait()) for i in range(3)]
+    assert frames[0] == frames[1] == frames[2]
+    assert "frame" in bus._recent[-1], "the first page paid, the rest read what it left"
+    assert frames[0].startswith(b"id: %d\nevent: token\ndata: " % (quiet + 1)), "numbered for resuming"
+    assert frames[0].endswith(b'{"text":"hello","final":false}\n\n'), "compact, and no spaces"
+
+    # a value JSON cannot write is said in words rather than losing the stream over it
+    class Thing:
+        def __str__(self) -> str:
+            return "a thing"
+
+    bus.emit("notice", {"what": Thing()})
+    assert b'"what":"a thing"' in frame_of(pages[0].get_nowait())
+
+
 def test_pages_stay_in_step_replay_resync_and_no_double_sends():
     from webui.events import EventBus
 

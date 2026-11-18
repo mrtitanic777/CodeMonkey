@@ -21,6 +21,8 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict, Optional
 
+from .events import frame_of, sse_frame
+
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
 _STATIC_TYPES = {
@@ -1714,9 +1716,15 @@ class WebHandler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------ sse ---
 
     def _send_sse(self, event_type: str, data: Any, seq: Optional[int] = None) -> None:
-        head = f"id: {seq}\n" if seq is not None else ""
-        payload = f"{head}event: {event_type}\ndata: {json.dumps(data)}\n\n".encode("utf-8")
-        # one write per event: split writes wait on each other and delay small events
+        self._send_frame(sse_frame(event_type, data, seq))
+
+    def _send_frame(self, payload: bytes) -> None:
+        """Hand one already-built event to the page.
+
+        The bytes arrive ready, because an event meant for several pages is serialised once for
+        all of them (webui/events.py). One write per event: split writes wait on each other and
+        delay small events.
+        """
         self.wfile.write(b"%X\r\n" % len(payload) + payload + b"\r\n")
         self.wfile.flush()
 
@@ -1744,7 +1752,7 @@ class WebHandler(BaseHTTPRequestHandler):
             if after is not None and missed is None:
                 self._send_sse("resync", {"seq": bus.seq})
             for event in missed or []:
-                self._send_sse(event["type"], event["data"], event["seq"])
+                self._send_frame(frame_of(event))
             while True:
                 try:
                     event = q.get(timeout=self.ping_seconds)
@@ -1755,7 +1763,7 @@ class WebHandler(BaseHTTPRequestHandler):
                     continue
                 if self._device and not self.app.devices.alive(self._device):
                     break
-                self._send_sse(event["type"], event["data"], event["seq"])
+                self._send_frame(frame_of(event))
                 if event["type"] == "session_end":
                     break
         except (ConnectionError, OSError):  # the page closed the stream

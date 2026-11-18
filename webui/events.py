@@ -11,10 +11,36 @@ told so and reloads the conversation instead. Either way no device is left showi
 
 from __future__ import annotations
 
+import json
 import queue
 import threading
 from collections import deque
 from typing import Any, Deque, Dict, List, Optional, Tuple
+
+
+def sse_frame(type: str, data: Any, seq: Optional[int] = None) -> bytes:
+    """The bytes one event travels in, as every page receives it.
+
+    Worked out once here rather than once per page: an event goes to every open stream, and
+    serialising it again for each of them is the same work repeated. Values that JSON cannot
+    write are turned into words instead of losing the stream over them.
+    """
+    head = f"id: {seq}\n" if seq is not None else ""
+    body = json.dumps(data, separators=(",", ":"), default=str)
+    return f"{head}event: {type}\ndata: {body}\n\n".encode("utf-8")
+
+
+def frame_of(event: Dict[str, Any]) -> bytes:
+    """An event's bytes, made the first time a page needs them and kept on the event.
+
+    The event a subscriber gets is the one every other subscriber gets, so the first sender pays
+    and the rest read what it left. An event nobody is watching is never encoded at all.
+    """
+    frame = event.get("frame")
+    if frame is None:
+        frame = sse_frame(event["type"], event["data"], event["seq"])
+        event["frame"] = frame
+    return frame
 
 
 class EventBus:
