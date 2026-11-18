@@ -185,9 +185,36 @@ def _fresh_entry(entry: Dict, abs_path: str, st=None) -> bool:
     )
 
 
+#: What the model reads first, and what keeps its detail when the project is too big for the
+#: pack. Alphabetical order lets one deep folder of noise take every slot; this puts the code and
+#: docs of the whole project first, and the shallow ones before the deeply nested ones.
+_SOURCE_EXTS = frozenset({
+    ".py", ".pyi", ".c", ".h", ".cc", ".cpp", ".cxx", ".hpp", ".hh", ".cs", ".go",
+    ".rs", ".rb", ".java", ".kt", ".js", ".jsx", ".mjs", ".ts", ".tsx", ".vue",
+    ".s", ".asm", ".sql", ".sh", ".bash", ".ps1", ".bat", ".cmd", ".html", ".css",
+    ".scss", ".json", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".md", ".rst",
+    ".txt", ".mak", "makefile", ".cmake", ".gradle", ".xml", ".proto", ".graphql",
+})
+
+
+def _rank(rel_path: str) -> Tuple[int, int, str]:
+    """Sort key for the pack: code and docs before other files, shallow before deep, then path."""
+    ext = os.path.splitext(rel_path)[1].lower()
+    return (0 if ext in _SOURCE_EXTS else 1, rel_path.count("/"), rel_path)
+
+
 #: The last pack read or written per cache file, with the file's mtime: a session opened again
-#: in the same process does not parse the whole pack again.
+#: in the same process does not parse the whole pack again. A parsed pack is tens of kilobytes,
+#: so the memo is capped: the oldest project drops out when a new one arrives.
 _MEMO: Dict[str, Tuple[float, Dict]] = {}
+_MEMO_MAX = 12
+
+
+def _memo_put(cache_path: str, mtime: float, data: Dict) -> None:
+    """Remember one parsed pack, keeping the memo to the last _MEMO_MAX projects."""
+    _MEMO[cache_path] = (mtime, data)
+    while len(_MEMO) > _MEMO_MAX:
+        _MEMO.pop(next(iter(_MEMO)))
 
 
 def _load_cached(cache_path: str) -> Optional[Dict]:
@@ -199,7 +226,7 @@ def _load_cached(cache_path: str) -> Optional[Dict]:
         else:
             with open(cache_path, "r", encoding="utf-8") as fh:
                 data = json.load(fh)
-            _MEMO[cache_path] = (mtime, data)
+            _memo_put(cache_path, mtime, data)
     except (OSError, ValueError):
         return None
     if not isinstance(data, dict) or data.get("version") != PACK_VERSION:
@@ -231,7 +258,8 @@ def build_pack(
     }
 
     patterns = _load_gitignore(base)
-    found = sorted(((rel, entry) for _, rel, entry in _walk_entries(base, patterns)), key=lambda t: t[0])[:max_files]
+    found = sorted(((rel, entry) for _, rel, entry in _walk_entries(base, patterns)),
+                   key=lambda t: _rank(t[0]))[:max_files]
 
     files: List[Dict] = []
     hits = misses = 0
@@ -266,7 +294,7 @@ def build_pack(
             serializable = dict(pack)
             with open(cache_path, "w", encoding="utf-8") as fh:
                 json.dump(serializable, fh)
-            _MEMO[cache_path] = (os.stat(cache_path).st_mtime, serializable)
+            _memo_put(cache_path, os.stat(cache_path).st_mtime, serializable)
         except OSError:
             pass
     pack = dict(pack)
@@ -290,42 +318,92 @@ def load_pack(
 
 
 def render_prefix(pack: Dict, max_chars: int = 30_000) -> str:
-    """Render the stable prompt prefix for a pack.
+    """Render the stable prompt prefix for a pack, most useful files first.
 
     Fixed ordering, fixed format, no timestamps: byte-identical across
     sessions for an unchanged project, which is what lets the inference
     engine's prefix cache hit.
+
+    The budget is shared by kind, best-ranked file first: the paths (up to a
+    third of it), then summaries and symbol names, each taking about half of
+    what the paths leave. Listing every path, then every summary, then every
+    symbol and cutting the result at the limit instead loses whichever
+    section happens to be last — for a project of any size, that is the
+    symbols, the one part the model cannot recover from a path name.
     """
-    files = pack.get("files", [])
-    lines = [
+    files = sorted(pack.get("files", []), key=lambda f: _rank(f.get("path", "")))
+    #: Room kept back for the closing note, so it is never cut off mid-sentence.
+    limit = max_chars - 200
+    lines: List[str] = [
         "[PROJECT CONTEXT]",
         f"Project: {pack.get('project_dir', '')}",
         f"Files: {len(files)}",
         "",
         "## File tree",
     ]
-    lines.extend(f["path"] for f in files)
-    lines.append("")
-    lines.append("## Files")
+    used = sum(len(line) + 1 for line in lines)
+
+    def fits(text: str, room: int) -> bool:
+        return used + len(text) + 1 <= room
+
+    # The tree is the cheap part and the map the rest is read against, so it
+    # goes first — but never more than a share of the budget, or a project
+    # with long paths leaves no room for anything else.
+    tree_cap = max_chars - (max_chars // 3)
+    shown = 0
     for f in files:
+        if not fits(f.get("path", ""), tree_cap):
+            break
+        lines.append(f["path"])
+        used += len(f["path"]) + 1
+        shown += 1
+    if shown < len(files):
+        more = f"... and {len(files) - shown} more files"
+        lines.append(more)
+        used += len(more) + 1
+
+    lines.extend(["", "## Files"])
+    used += len("## Files") + 1
+    #: Half of whatever the tree left is held back for symbols. Filling sections
+    #: greedily in one order lets whichever is largest take everything: here the
+    #: paths and summaries alone need 31,661 chars, so the symbols lost all of it.
+    #: A fixed share of the whole budget fails the other way, at a smaller budget
+    #: where the tree already fills that share and no summary fits at all.
+    summary_room = limit - (limit - used) // 2
+    detailed = 0
+    for f in files:
+        head = f"### {f.get('path', '')}"
         summary = f.get("summary") or "(no summary)"
-        lines.append(f"### {f['path']}")
+        if not fits(head, summary_room) or not fits(summary, summary_room):
+            break
+        lines.append(head)
         lines.append(summary)
-    lines.append("")
-    lines.append("## Symbols")
-    any_symbols = False
+        used += len(head) + len(summary) + 2
+        detailed += 1
+    if detailed < len(files):
+        more = (f"({len(files) - detailed} more files are in the tree above without a "
+                "summary; use glob or grep to look them up.)")
+        lines.append(more)
+        used += len(more) + 1
+
+    # What is left buys symbol names, best-ranked file first: the index the
+    # model uses to aim at a function without reading the file.
+    indexed = 0
     for f in files:
-        for sym in f.get("symbols", []):
-            any_symbols = True
-            doc = f" — {sym['doc']}" if sym.get("doc") else ""
-            lines.append(
-                f"{f['path']}: {sym['name']} "
-                f"({sym['kind']}, line {sym['line']}){doc}"
-            )
-    if not any_symbols:
-        lines.append("(no symbols indexed)")
+        names = ", ".join(s["name"] for s in f.get("symbols", []))
+        if not names:
+            continue
+        line = f"{f['path']}: {names}"
+        if not fits(line, limit):
+            break
+        if not indexed:
+            lines.extend(["", "## Symbols"])
+            used += len("## Symbols") + 1
+        lines.append(line)
+        used += len(line) + 1
+        indexed += 1
     text = "\n".join(lines) + "\n"
-    if len(text) > max_chars:
+    if len(text) > max_chars:      # only the header can overrun it, on a huge path
         text = text[:max_chars] + "\n... [pack truncated]"
     return text
 

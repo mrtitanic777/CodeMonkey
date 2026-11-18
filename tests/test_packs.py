@@ -127,7 +127,7 @@ def test_render_prefix_byte_stable():
     assert "## File tree" in first and "## Symbols" in first
     assert "built_at" not in first, "no timestamps in the render"
     assert "Main entry point." in first
-    assert "App.run (function, line 6)" in first
+    assert "main.py: App, App.run, helper" in first, first
     print("PASS test_render_prefix_byte_stable")
 
 
@@ -212,12 +212,68 @@ def test_pack_stats_shape():
     print("PASS test_pack_stats_shape")
 
 
+def test_big_project_keeps_symbols_within_budget():
+    """A project too big for the pack must lose detail evenly, not lose symbols whole."""
+    tmp = tempfile.mkdtemp(prefix="packbig_")
+    proj, cache = os.path.join(tmp, "proj"), os.path.join(tmp, "cache")
+    os.makedirs(proj)
+    # 120 small modules: paths + summaries alone overflow a small budget.
+    for i in range(120):
+        with open(os.path.join(proj, f"m{i:03d}.py"), "w", encoding="utf-8") as fh:
+            fh.write(f'"""Module number {i}, described at some length."""\n'
+                     f"def func_{i}():\n    pass\n")
+    pack = build_pack(proj, cache)
+    assert len(pack["files"]) == 120, len(pack["files"])
+    budget = 4000
+    rendered = render_prefix(pack, max_chars=budget)
+    assert len(rendered) <= budget, (len(rendered), budget)
+    assert "## File tree" in rendered and "## Files" in rendered, rendered
+    # The old render cut at the limit and lost whichever section came last.
+    assert "## Symbols" in rendered, rendered
+    assert "func_0" in rendered, rendered
+    # Every file is still named, even where its summary had to go.
+    assert "... and " in rendered or rendered.count(".py") >= 120, rendered
+    assert render_prefix(pack, max_chars=budget) == rendered, "byte-stable"
+    print("PASS test_big_project_keeps_symbols_within_budget")
+
+
+def test_rank_orders_source_then_depth():
+    """A capped pack must spend its slots on code first, and on the shallow code first."""
+    tmp = tempfile.mkdtemp(prefix="packrank_")
+    proj, cache = os.path.join(tmp, "proj"), os.path.join(tmp, "cache")
+    deep = os.path.join(proj, "vendor", "fonts", "x", "y")
+    os.makedirs(deep)
+    for rel, body in {
+        "app.py": '"""The app."""\n',
+        "lib/deep/core.py": '"""Deep module."""\n',
+    }.items():
+        path = os.path.join(proj, *rel.split("/"))
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(body)
+    for i in range(40):   # shallow junk: first alphabetically, and not code
+        with open(os.path.join(proj, f"a{i:03d}.dat"), "w", encoding="utf-8") as fh:
+            fh.write("noise\n")
+    for i in range(40):   # deep code: last alphabetically, and deep
+        with open(os.path.join(deep, f"z{i:03d}.css"), "w", encoding="utf-8") as fh:
+            fh.write("/* noise */\n")
+
+    paths = [f["path"] for f in build_pack(proj, cache, max_files=10)["files"]]
+    assert paths[0] == "app.py", paths                 # code before shallow junk
+    assert "lib/deep/core.py" in paths, paths          # deep code still beats shallow junk
+    assert not any(p.endswith(".dat") for p in paths), paths
+    assert all(p.endswith(".css") or "/" in p for p in paths[1:]), paths
+    print("PASS test_rank_orders_source_then_depth")
+
+
 def main():
     tests = [
         test_pack_builds_over_fixture,
         test_summaries_extracted_correctly,
         test_symbol_index_correct,
         test_render_prefix_byte_stable,
+        test_big_project_keeps_symbols_within_budget,
+        test_rank_orders_source_then_depth,
         test_mtime_invalidation_rescans_only_changed,
         test_cache_round_trips_as_json,
         test_binary_and_oversize_skipped,
