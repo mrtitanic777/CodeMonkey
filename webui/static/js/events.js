@@ -248,6 +248,18 @@ function watchConnection() {
   window.addEventListener("offline", function () { setLink(true); });
 }
 
+/* A partly written answer arrives as its newest words, not the whole of it again every time
+   (webui/app.py _on_delta): a long reply used to cost the stream about twenty times its own
+   length. The first event of a run, and any after a second of silence, carries the whole text,
+   so a missed event cannot leave a hole. Everything below this still sees the whole answer. */
+var STREAM = { text: "" };
+
+function tokenData(d) {
+  if (d.piece == null) { STREAM.text = d.text || ""; return d; }
+  STREAM.text += d.piece;
+  return { text: STREAM.text, final: !!d.final };
+}
+
 function handleEvent(type, d) {
   switch (type) {
     case "state": applySnapshot(d); break;
@@ -274,6 +286,7 @@ function handleEvent(type, d) {
       break;
     case "token":
       if (S.liveStep && S.liveStep.indexOf("Reading the conversation") === 0) S.liveStep = "";
+      d = tokenData(d);
       onToken(d);
       if (typeof CALL !== "undefined" && CALL.on) callOnToken(d);
       break;

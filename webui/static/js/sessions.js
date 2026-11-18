@@ -321,6 +321,11 @@ function openSession(id) {
 
 function applySnapshot(snap) {
   S.snap = snap;
+  // An answer being written right now: the events that follow carry only its newest words, so the
+  // page needs what has been written up to this moment (webui/app.py _on_delta). Skip it when the
+  // page already holds more than the snapshot — a snapshot can be older than the last event, and
+  // taking it then would drop words the page has already been sent.
+  if (snap.streaming != null && STREAM.text.indexOf(snap.streaming) !== 0) STREAM.text = snap.streaming;
   if (S.findOnOpen) setTimeout(findInChat, 200);
   S.status[snap.id] = snap.status;
   S.todos = snap.todos || [];

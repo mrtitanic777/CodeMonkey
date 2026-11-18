@@ -681,9 +681,13 @@ class WebSession:
         self._compact_trigger = "auto"
         self._stream_text = ""
         self._stream_at = 0.0
+        self._stream_new = ""       # words the page has not been sent yet
+        self._stream_fresh = True   # the next partial is a start-over, not a continuation
         self._think_text = ""
         self._think_at = 0.0
         self._think_started = 0.0
+        self._think_new = ""
+        self._think_fresh = True
 
         self._thread = threading.Thread(
             target=self._worker, name=f"websession-{session_id[:8]}", daemon=True
@@ -1064,7 +1068,8 @@ class WebSession:
                 # all of them: the last ones may have come after the last (throttled) token event
                 self.bus.emit("token", {"text": self._stream_text, "final": False}, transient=True)
                 self._record({"kind": "assistant", "text": lead_in, "interim": True})
-            self._stream_text = ""   # what was streamed so far was the lead-in to this step
+            # what was streamed so far was the lead-in to this step; what follows is new text
+            self._reset_stream()
             self.bus.emit(
                 "tool_call", {"name": name, "args": _short_args(args, 300)}
             )
@@ -1434,7 +1439,7 @@ class WebSession:
                 fallbacks.append((ref, lambda p=p, m=m: self._raw_client(p, m)))
 
         def notify(text: str) -> None:
-            self._stream_text = ""
+            self._reset_stream()   # the next answer comes from another model: start over
             self._record({"kind": "notice", "text": text})
             self.bus.emit("notice", {"text": text})
             self._activity("failover", text[:160], "", "error")
@@ -1491,10 +1496,30 @@ class WebSession:
         if self._think_text:
             self._end_thinking()
         self._stream_text += piece
+        self._stream_new += piece
         now = time.monotonic()
         if now - self._stream_at >= 0.08:
+            gap = now - self._stream_at
             self._stream_at = now
-            self.bus.emit("token", {"text": self._stream_text, "final": False}, transient=True)
+            # A page that is keeping up is sent only the new words. The first of a run, and any
+            # after a second of silence, carries the whole answer instead, so a missed event
+            # cannot leave the reply with a hole nobody notices. A page that reconnects is sent
+            # the whole of it from the backlog (webui/events.py).
+            whole = self._stream_fresh or gap >= 1.0
+            self._stream_fresh = False
+            self.bus.emit(
+                "token",
+                {"text": self._stream_text, "final": False} if whole
+                else {"piece": self._stream_new, "final": False},
+                transient=True,
+                backlog={"text": self._stream_text, "final": False})   # a page arriving later needs the whole
+            self._stream_new = ""
+
+    def _reset_stream(self) -> None:
+        """Start the page's answer again: what follows is a new piece of text, not more of the old."""
+        self._stream_text = ""
+        self._stream_new = ""
+        self._stream_fresh = True
 
     def _build_client(self, provider: Optional[str] = None, stream: bool = True):
         """Client for a turn: provider-resolved, then context-managed."""
@@ -2350,7 +2375,7 @@ class WebSession:
         in_chars = sum(len(json.dumps(m)) for m in self.history) + len(full_text)
         failed = False
         try:
-            self._stream_text = ""
+            self._reset_stream()   # this turn's answer starts from nothing
             self._think_text = ""   # thinking left by a stopped turn is not this turn's
             # the session's own config follows the model chosen in the menu, so what is decided from it
             # (whether the model is shown pictures) is about the model this turn uses, not the first one
@@ -2989,6 +3014,9 @@ class WebSession:
             "tokens_out": self.tokens_out,
             "context_chars": history_chars,
             "has_pending_plan": self._pending_plan is not None,
+            # a page that starts watching in the middle of an answer needs the words written so
+            # far: the events that follow carry only what is new (see _on_delta)
+            "streaming": self._stream_text if self.status == "working" else "",
             "queue_depth": self.inbox.qsize(),
             "is_git_repo": bool(git.get("repo")),
         }

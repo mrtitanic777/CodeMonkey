@@ -107,21 +107,28 @@ class EventBus:
             if q in self._subs:
                 self._subs.remove(q)
 
-    def emit(self, type: str, data: Dict[str, Any] | None = None, transient: bool = False) -> int:
+    def emit(self, type: str, data: Dict[str, Any] | None = None, transient: bool = False,
+             backlog: Optional[Dict[str, Any]] = None) -> int:
         """Publish an event and return its number.
 
         A *transient* event is one that the next of its kind makes obsolete (a partly written
         answer, a progress tick). Only the latest in a run is kept for replay, so a long answer
         cannot push everything else out of the backlog.
+
+        *backlog* is what a page that reconnects should be given, when that is not what the pages
+        watching now are being sent: a partly written answer goes out as its newest words, but a
+        page arriving later needs the whole of it, not the last piece.
         """
         with self._lock:
             self._seq += 1
             event = {"type": type, "data": data or {}, "seq": self._seq, "transient": transient}
+            # what the backlog keeps: the same event, or its fuller version if one was given
+            kept = dict(event, data=backlog) if backlog is not None else event
             last = self._recent[-1] if self._recent else None
             if transient and last is not None and last["transient"] and last["type"] == type:
-                self._recent[-1] = event
+                self._recent[-1] = kept
             else:
-                self._recent.append(event)
+                self._recent.append(kept)
             subs = list(self._subs)
         for q in subs:
             try:

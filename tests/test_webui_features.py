@@ -3192,6 +3192,55 @@ def test_an_event_is_serialised_once_for_every_page():
     assert b'"what":"a thing"' in frame_of(pages[0].get_nowait())
 
 
+def test_a_partly_written_answer_travels_as_its_new_words():
+    """A long reply used to be sent again in full every eighth of a second. It now travels as its
+    newest words, but the whole answer is still what a page that arrives later is given."""
+    from webui.events import EventBus
+
+    bus = EventBus()
+    page = bus.subscribe()
+    bus.emit("token", {"text": "Once upon", "final": False}, transient=True,
+           backlog={"text": "Once upon", "final": False})
+    bus.emit("token", {"piece": " a time", "final": False}, transient=True,
+           backlog={"text": "Once upon a time", "final": False})
+    assert page.get_nowait()["data"]["text"] == "Once upon"
+    assert page.get_nowait()["data"]["piece"] == " a time", "the live page gets only the new words"
+    # the backlog keeps the whole of it, so a page reconnecting mid-answer sees no hole
+    assert bus.subscribe_from(1)[1][-1]["data"]["text"] == "Once upon a time"
+
+    with tempfile.TemporaryDirectory() as tmp:
+        app, server, base = start_server(tmp)
+        try:
+            sid, fake = make_session_with_fake(base, tmp, [])
+            session = app.get_session(sid)
+            session.settings["permission_mode"] = "auto"
+            reader = SSEReader(f"{base}/api/sessions/{sid}/events")
+            reader.start()
+            reader.wait_for("state")
+            for word in "one two three four five six seven eight".split():
+                session._on_delta(("" if word == "one" else " ") + word)   # fast, as a model writes
+                time.sleep(0.09)   # past the throttle, so several of them actually go out
+            session.bus.emit("token", {"text": "one two three four five six seven eight",
+                                       "final": True})
+            deadline = time.time() + 10
+            while time.time() < deadline and not any(
+                    d.get("final") for t, d in reader.events if t == "token"):
+                time.sleep(0.05)
+            reader.stop()
+            tokens = [d for t, d in reader.events if t == "token"]
+            whole = [d for d in tokens if "text" in d]
+            pieces = [d for d in tokens if "piece" in d]
+            assert pieces, "the answer came in pieces, not the whole text each time"
+            assert len(whole) == 2, whole   # only the start of the answer, and its end
+            joined = ""
+            for d in tokens:
+                joined = d["text"] if "text" in d else joined + d["piece"]
+            assert joined == "one two three four five six seven eight", joined
+            assert tokens[-1]["final"] and tokens[-1]["text"] == joined
+        finally:
+            server.shutdown()
+
+
 def test_a_page_that_cannot_keep_up_is_told_to_reload():
     """A stream that stops reading must not pile events up forever, and must not quietly show a
     conversation with holes in it: the waiting room is bounded, and the page is told to reload."""
