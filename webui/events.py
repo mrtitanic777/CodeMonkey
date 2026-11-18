@@ -43,6 +43,20 @@ def frame_of(event: Dict[str, Any]) -> bytes:
     return frame
 
 
+class _Page(queue.Queue):
+    """One page's waiting room for events, with room for a limited number.
+
+    A stream that stops reading - a phone whose connection still looks alive after it slept -
+    would otherwise pile events up here for the life of the session. When the room fills the page
+    is marked as behind, and the stream tells it to reload what it missed rather than quietly
+    dropping events it will never hear.
+    """
+
+    def __init__(self, maxsize: int = 1000) -> None:
+        super().__init__(maxsize)
+        self.behind = False
+
+
 class EventBus:
     """One bus per session (and one for the app as a whole)."""
 
@@ -76,7 +90,7 @@ class EventBus:
         or None when that cannot be given: nothing was asked for, or it is too long ago.
         Subscribing and reading the backlog happen in one step, so nothing falls between them.
         """
-        q: queue.Queue = queue.Queue()
+        q = _Page()
         with self._lock:
             self._subs.append(q)
             if after is None:
@@ -112,6 +126,8 @@ class EventBus:
         for q in subs:
             try:
                 q.put_nowait(event)
-            except queue.Full:  # pragma: no cover - unbounded queues
-                pass
+            except queue.Full:
+                # this page has stopped reading; say so once, and its stream will tell it to
+                # reload rather than show a conversation with holes in it
+                q.behind = True
         return event["seq"]

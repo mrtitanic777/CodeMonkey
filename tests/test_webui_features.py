@@ -3192,6 +3192,43 @@ def test_an_event_is_serialised_once_for_every_page():
     assert b'"what":"a thing"' in frame_of(pages[0].get_nowait())
 
 
+def test_a_page_that_cannot_keep_up_is_told_to_reload():
+    """A stream that stops reading must not pile events up forever, and must not quietly show a
+    conversation with holes in it: the waiting room is bounded, and the page is told to reload."""
+    from webui.events import EventBus
+
+    bus = EventBus()
+    slow = bus.subscribe()
+    assert slow.maxsize > 0, "an unbounded waiting room grows for the life of the session"
+    for n in range(slow.maxsize + 50):
+        bus.emit("notice", {"n": n})
+    assert slow.behind, "the page that stopped reading is marked as behind"
+    assert slow.qsize() == slow.maxsize, "and it holds no more than its room"
+
+    # a page that fills up is not an error: the emitter carries on for everyone else
+    others = bus.subscribe()
+    for n in range(5):
+        bus.emit("notice", {"n": n})
+    assert [others.get_nowait()["data"]["n"] for _ in range(5)] == [0, 1, 2, 3, 4]
+
+    with tempfile.TemporaryDirectory() as tmp:
+        app, server, base = start_server(tmp)
+        try:
+            sid = http("POST", f"{base}/api/sessions", {"project_dir": tmp})[1]["id"]
+            session = app.get_session(sid)
+            # a burst: three notices written while the page was away, all of them delivered, in
+            # order, on one stream that opened after them (they arrive as what it missed)
+            for text in ("a", "b", "c"):
+                session.bus.emit("notice", {"text": text})
+            got = _read_stream(f"{base}/api/sessions/{sid}/events?after=0", 4)
+            assert got[0][1] == "state", got
+            notices = [e for e in got if e[1] == "notice"]
+            assert [e[2]["text"] for e in notices] == ["a", "b", "c"], got
+            assert [e[0] for e in notices] == sorted(e[0] for e in notices), "numbered in order"
+        finally:
+            server.shutdown()
+
+
 def test_pages_stay_in_step_replay_resync_and_no_double_sends():
     from webui.events import EventBus
 

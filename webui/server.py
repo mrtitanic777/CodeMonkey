@@ -215,6 +215,8 @@ class WebHandler(BaseHTTPRequestHandler):
 
     #: The paired device this request comes from ("" for this computer itself).
     _device = ""
+    #: When this stream last checked that its device is still paired (its own event stream).
+    _checked = 0.0
 
     def _cookie(self, wanted: str) -> str:
         for part in (self.headers.get("Cookie") or "").split(";"):
@@ -1719,12 +1721,19 @@ class WebHandler(BaseHTTPRequestHandler):
         self._send_frame(sse_frame(event_type, data, seq))
 
     def _send_frame(self, payload: bytes) -> None:
-        """Hand one already-built event to the page.
+        """Hand one already-built event to the page."""
+        self._send_batch([payload])
+
+    def _send_batch(self, frames: list) -> None:
+        """Send everything that is waiting, in one write.
 
         The bytes arrive ready, because an event meant for several pages is serialised once for
-        all of them (webui/events.py). One write per event: split writes wait on each other and
-        delay small events.
+        all of them (webui/events.py). A page that has been away can have hundreds of events
+        waiting, and a fast answer sends one every eightieth of a second, so one write and flush
+        per event spends a syscall on each. Chunked framing carries several events together and
+        the page still reads them in order; nothing is held back waiting for company.
         """
+        payload = b"".join(frames)
         self.wfile.write(b"%X\r\n" % len(payload) + payload + b"\r\n")
         self.wfile.flush()
 
@@ -1748,23 +1757,40 @@ class WebHandler(BaseHTTPRequestHandler):
         self.end_headers()
         q, missed = bus.subscribe_from(after)
         try:
-            self._send_sse(*first())
+            # come back quickly after a drop, rather than the browser's three seconds
+            frames = [b"retry: 1500\n\n", sse_frame(*first())]
             if after is not None and missed is None:
-                self._send_sse("resync", {"seq": bus.seq})
-            for event in missed or []:
-                self._send_frame(frame_of(event))
+                frames.append(sse_frame("resync", {"seq": bus.seq}))
+            frames.extend(frame_of(event) for event in missed or [])
+            self._send_batch(frames)
             while True:
                 try:
                     event = q.get(timeout=self.ping_seconds)
                 except queue.Empty:
+                    # a whole keep-alive with nothing to send: is the device behind this stream
+                    # still paired? Asked once an interval, never once an event.
                     if self._device and not self.app.devices.alive(self._device):
                         break
+                    self._checked = time.monotonic()
                     self._send_sse("ping", {"seq": bus.seq})
                     continue
-                if self._device and not self.app.devices.alive(self._device):
-                    break
-                self._send_frame(frame_of(event))
-                if event["type"] == "session_end":
+                if self._device and time.monotonic() - self._checked >= self.ping_seconds:
+                    self._checked = time.monotonic()   # a busy stream never reaches the ping above
+                    if not self.app.devices.alive(self._device):
+                        break
+                frames, ended = [frame_of(event)], event["type"] == "session_end"
+                while not ended:   # whatever else arrived in the same moment goes in the same write
+                    try:
+                        nxt = q.get_nowait()
+                    except queue.Empty:
+                        break
+                    frames.append(frame_of(nxt))
+                    ended = nxt["type"] == "session_end"
+                if q.behind:   # this page could not keep up: it has holes, so let it reload
+                    frames.append(sse_frame("resync", {"seq": bus.seq}))
+                    q.behind = False
+                self._send_batch(frames)
+                if ended:
                     break
         except (ConnectionError, OSError):  # the page closed the stream
             pass
