@@ -61,8 +61,19 @@ _MODULE_NAMES = frozenset(
 _BUILTINS = frozenset(dir(builtins)) | _MODULE_NAMES
 
 
-# a pytest run: the runner itself, then whatever narrowed it
-_PYTEST_RUN = re.compile(r"^((?:python[0-9.]*|py)\s+-m\s+pytest|pytest|py\.test)\b(.*)$", re.S)
+# a pytest run: the runner itself, then whatever narrowed it. The interpreter may be named the
+# way a model writes it: plain `python`, or the full path to it, quoted or not (a Windows path
+# with spaces comes quoted). Only the runner is kept for the widened command.
+_INTERP = (r"python[0-9.]*|py"
+           r'|"[^"]*[\\/](?:python[0-9.]*|py)(?:\.exe)?"'
+           r"|[:\w.~+@%$\\/-]*[\\/](?:python[0-9.]*|py)(?:\.exe)?")
+_PYTEST_RUN = re.compile(rf"^((?:{_INTERP})\s+-m\s+pytest|pytest|py\.test)\b(.*)$", re.S)
+
+#: what it looks like when the widened run never reached the tests at all: the interpreter has no
+#: pytest, the program is not on the path, or the shell could not run the line
+_RUNNER_MISSING = ("no module named pytest", "command not found", "not recognized as an internal",
+                   "can't find module", "couldn't find", "no such file or directory",
+                   "is not a valid python", "modulenotfounderror", "nameerror: no module named")
 
 
 def is_test_command(cmd: str) -> bool:
@@ -703,6 +714,13 @@ class CodeGate:
         output = _ANSI_RE.sub("", done.output.strip() or "(no output)")[-6000:]
         ledger.note_run(cmd, f"[exit {done.code}]\n{output}", time.monotonic() - started, gate=True)
         if done.code == 0:
+            return None
+        # A run that never got as far as the tests is not a failing suite. The widened command is
+        # the model's own interpreter line, which may not be the one that has pytest, or the shell
+        # may not find it at all. Saying "the whole suite failed" then would be a claim we cannot
+        # support: it is simply unknown, so the reply gate stays quiet.
+        low = output.lower()
+        if any(word in low for word in _RUNNER_MISSING):
             return None
         failed = [" ".join(line.split())[:230] for line in output.splitlines() if line.startswith(("FAILED ", "ERROR "))]
         return {"cmd": cmd, "narrow": str(last["cmd"])[:120],

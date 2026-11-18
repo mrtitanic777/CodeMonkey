@@ -209,15 +209,46 @@ def test_when_only_part_of_the_tests_were_run_the_whole_suite_is(tmp_path):
     session.app = types.SimpleNamespace(settings={})
     gate = CodeGate(session)
     assert gate.whole_suite() is None, "nothing was changed: nothing to check"
+    # The interpreter running this test is the one that has pytest, and the widened run really
+    # runs it: a bare `python` would be whatever the machine calls python, which may not.
+    py = sys.executable.replace(os.sep, "/")
     session.ledger.note_tool("edit", {"path": "a.py", "new_text": "x"}, "ok")
-    session.ledger.note_tool("bash", {"cmd": "python -m pytest test_a.py -q"}, "[exit 0]\n1 passed")
+    session.ledger.note_tool("bash", {"cmd": f"{py} -m pytest test_a.py -q"}, "[exit 0]\n1 passed")
     found = gate.whole_suite()
-    assert found and found["cmd"] == "python -m pytest -q" and "test_a.py" in found["narrow"], found
+    assert found and found["cmd"] == f"{py} -m pytest -q" and "test_a.py" in found["narrow"], found
     assert any("test_b.py::test_b" in line for line in found["failed"]), found
     assert session.ledger.runs[-1]["gate"] and session.ledger.runs[-1]["exit"] == 1
     # the whole suite was what was run: there is nothing to widen
     session.ledger.note_tool("bash", {"cmd": "python -m pytest -q"}, "[exit 0]\n2 passed")
     assert gate.whole_suite() is None
+
+
+def test_a_widened_run_that_never_reached_pytest_is_not_reported(tmp_path):
+    """The widened command is the model's own interpreter line, and that interpreter may not have
+    pytest. A run that never got as far as the tests says nothing about the suite."""
+    import procutil
+    from webui.codegate import CodeGate
+
+    (tmp_path / "test_a.py").write_text("def test_a():\n    assert 1 == 1\n", encoding="utf-8")
+    session = _session("medium")
+    session.project_dir = str(tmp_path)
+    session.app = types.SimpleNamespace(settings={})
+    gate = CodeGate(session)
+    session.ledger.note_tool("edit", {"path": "a.py", "new_text": "x"}, "ok")
+    session.ledger.note_tool("bash", {"cmd": "python -m pytest test_a.py -q"}, "[exit 0]\n1 passed")
+    real = procutil.run_shell
+    try:
+        # it fails, but only because pytest is not there at all: nothing was learned
+        procutil.run_shell = lambda *a, **k: procutil.Done(1, "", "No module named pytest", False)
+        assert gate.whole_suite() is None, "not a failing suite: it never started"
+        # a run that did reach the tests is still reported
+        session.ledger.runs.pop()
+        procutil.run_shell = lambda *a, **k: procutil.Done(
+            1, "= FAILURES =\nFAILED test_b.py::test_b - assert 1 == 2", "", False)
+        found = gate.whole_suite()
+        assert found and any("test_b.py::test_b" in line for line in found["failed"]), found
+    finally:
+        procutil.run_shell = real
 
 
 def test_thinking_is_spent_on_a_change_to_code_not_on_looking(tmp_path):
