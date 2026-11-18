@@ -440,6 +440,12 @@ class Models:
         self.running: Dict[str, Any] = {}
         self.router = False   # the server was started for several models and swaps between them
         self.hub = HUB
+        import atexit
+
+        # A model server holds many gigabytes of memory and VRAM. Started from here, it must not
+        # outlive this program: the desktop app ends the whole process group, but `python webui.py`
+        # stopped with Ctrl-C left llama-server running with nothing talking to it.
+        atexit.register(self.stop)
 
     def _sleep(self) -> float:
         try:

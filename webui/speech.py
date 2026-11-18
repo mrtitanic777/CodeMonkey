@@ -57,7 +57,7 @@ def piper() -> Optional[Tuple[str, str]]:
 
 #: The voice a call speaks with when none is chosen in Settings (Kokoro's best-rated one).
 DEFAULT_VOICE = "af_heart"
-_KOKORO = {"engine": None, "error": "", "lock": threading.Lock()}
+_KOKORO = {"engine": None, "error": "", "from": "", "lock": threading.Lock()}
 
 
 def kokoro_files() -> Optional[Tuple[str, str]]:
@@ -73,8 +73,15 @@ def kokoro_files() -> Optional[Tuple[str, str]]:
 
 
 def _kokoro():
-    """Kokoro, loaded once and kept (a second or two to load; then a sentence takes a fraction of that)."""
+    """Kokoro, loaded once and kept (a second or two to load; then a sentence takes a fraction of that).
+
+    The cache remembers which speech folder it was loaded from. Pointing CODEMONKEY_SPEECH
+    somewhere else, or removing the folder, must not keep a voice that is no longer set up.
+    """
     with _KOKORO["lock"]:
+        base = speech_dir()
+        if _KOKORO["engine"] is not None and _KOKORO["from"] != base:
+            _KOKORO["engine"], _KOKORO["error"] = None, ""
         if _KOKORO["engine"] is None:
             files = kokoro_files()
             if files is None:
@@ -101,6 +108,7 @@ def _kokoro():
 
             try:
                 _KOKORO["engine"] = Kokoro(*files)
+                _KOKORO["from"] = base
             except Exception as exc:  # noqa: BLE001 - the page falls back to the system's voices
                 _KOKORO["error"] = f"{type(exc).__name__}: {exc}"
                 return None
