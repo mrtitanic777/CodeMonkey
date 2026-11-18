@@ -359,12 +359,16 @@ class NasmPack(_AsmPack):
     NAME = "asm-x86"
 
     def test_instructions_misspellings_and_64_bit_mode(self):
-        code = "bits 64\nsection .text\nf:\n    mov rax, rcx\n    addd rax, rdx\n    pusha\n    ret\n"
+        # `addd` looks like a typo of `add` and is not: it is NASM's x87 add, so the pack is right
+        # to know it. `addx` is the misspelling, and NASM itself is what settled both.
+        code = ("bits 64\nsection .text\nf:\n    mov rax, rcx\n    addd rax, rdx\n"
+                "    addx rax, rdx\n    pusha\n    ret\n")
         f = self.findings(code, {"platform": "win64"})
         self.assertEqual(f["mov"]["state"], "KNOWN")
         self.assertIsNone(kbcheck.verify(self.kb, f["mov"]))       # NASM asked again
-        self.assertEqual(f["addd"]["state"], "LOW_CONFIDENCE")
-        self.assertIn("add", f["addd"]["near"])
+        self.assertEqual(f["addd"]["state"], "KNOWN")
+        self.assertEqual(f["addx"]["state"], "LOW_CONFIDENCE")
+        self.assertIn("add", f["addx"]["near"])
         self.assertEqual(f["pusha"]["state"], "CONFLICTED")
 
     def test_the_assembler_has_the_last_word(self):
