@@ -56,6 +56,10 @@ _FILES_CACHE_MAX = 8                  # an entry can be 50,000 paths, so the old
 #: picture or a clip of speech for a call (a few MB); nothing legitimate needs more than this.
 MAX_BODY_BYTES = 64 * 1024 * 1024
 
+#: The smallest JSON answer worth packing. Below this the compressed copy saves too little to
+#: pay for the work, and most of the API's answers are far smaller than it anyway.
+MIN_GZIP_BYTES = 1024
+
 
 def _project_files(project_dir: str) -> list:
     """The project's files as relative paths. In a git repository, what git sees (tracked and
@@ -150,11 +154,28 @@ class WebHandler(BaseHTTPRequestHandler):
 
     def _json(self, obj: Any, status: int = 200) -> None:
         data = json.dumps(obj).encode("utf-8")
+        # A conversation's record is the biggest thing this server sends, and text like it packs
+        # down about four times: 115 KB of history arrives as 25 KB for a millisecond of work.
+        # Small answers are not worth packing, and a page that cannot unpack them gets it plain.
+        packed = None
+        if len(data) >= MIN_GZIP_BYTES and "gzip" in (self.headers.get("Accept-Encoding") or ""):
+            import gzip
+
+            try:
+                candidate = gzip.compress(data, 6, mtime=0)
+                if len(candidate) < len(data):
+                    packed = candidate
+            except OSError:   # no room to compress: send it plain
+                pass
+        body = packed if packed is not None else data
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Content-Length", str(len(body)))
+        if packed is not None:
+            self.send_header("Content-Encoding", "gzip")
+            self.send_header("Vary", "Accept-Encoding")
         self.end_headers()
-        self.wfile.write(data)
+        self.wfile.write(body)
 
     def _error(self, message: str, status: int = 400) -> None:
         self._json({"error": message}, status=status)

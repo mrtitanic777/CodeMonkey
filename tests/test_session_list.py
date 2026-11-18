@@ -118,7 +118,46 @@ def test_page_files_are_compressed_and_cached():
     print("PASS test_page_files_are_compressed_and_cached")
 
 
+def test_a_long_answer_is_sent_compressed():
+    """A conversation's record is the biggest thing the API sends, and text like it packs down
+    about four times. A page that can unpack it gets the small version; one that cannot, and any
+    small answer, get it plain."""
+    from test_webui import http   # noqa: WPS433 - same folder
+
+    with tempfile.TemporaryDirectory() as tmp:
+        app, server, base = start_server(tmp)
+        try:
+            sid = http("POST", f"{base}/api/sessions", {"project_dir": tmp})[1]["id"]
+            session = app.get_session(sid)
+            for n in range(80):   # a day of conversation, the case that matters
+                session.transcript.append({"kind": "user", "text": f"question {n} " + "word " * 80})
+                session.transcript.append({"kind": "assistant", "text": f"answer {n} " + "word " * 160})
+            path = f"{base}/api/sessions/{sid}/history"
+
+            def fetch(encoding):
+                req = urllib.request.Request(path, headers={"Accept-Encoding": encoding})
+                with urllib.request.urlopen(req) as r:
+                    raw, headers = r.read(), r.headers
+                body = gzip.decompress(raw) if headers.get("Content-Encoding") == "gzip" else raw
+                return len(raw), headers, body   # the bytes actually sent
+
+            plain, _, _ = fetch("identity")
+            packed, headers, body = fetch("gzip")
+            assert headers["Content-Encoding"] == "gzip", "a page that can unpack gets the small version"
+            assert headers["Vary"] == "Accept-Encoding", "so a cache keeps the two apart"
+            assert packed < plain / 2, (plain, packed)
+            assert len(json.loads(body)["transcript"]) == 160, "and it still says the same thing"
+
+            # a small answer is not worth packing, whatever the page will accept
+            with urllib.request.urlopen(f"{base}/api/sessions") as r:
+                assert r.headers.get("Content-Encoding") is None
+        finally:
+            server.shutdown()
+    print("PASS test_a_long_answer_is_sent_compressed")
+
+
 if __name__ == "__main__":
     test_unused_sessions_drop_out_and_opening_keeps_the_place()
     test_a_session_nobody_watches_is_let_go_and_comes_back()
     test_page_files_are_compressed_and_cached()
+    test_a_long_answer_is_sent_compressed()
