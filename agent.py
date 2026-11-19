@@ -131,7 +131,22 @@ RUNAWAY_CHARS = 600
 
 #: Request fields a server may not know. If a request carrying them is refused, it is sent once
 #: more without them, and they are left out from then on.
-OPTIONAL_FIELDS = ("reasoning_effort", "thinking_budget_tokens", "max_tokens", "strata_checkpoint")
+OPTIONAL_FIELDS = ("reasoning_effort", "thinking_budget_tokens", "reasoning_budget_tokens", "max_tokens",
+                   "strata_checkpoint")
+#: The names servers take a thinking budget by (llama.cpp's, and Strata's own).
+BUDGET_FIELDS = ("thinking_budget_tokens", "reasoning_budget_tokens")
+#: A step that only carries on after tool results that went fine thinks this share of the turn's budget,
+#: and at least FOLLOW_UP_FLOOR tokens; after a failure it gets the whole budget again. The plan was made
+#: in the turn's first step; most later steps are "that worked, do the next thing", and on a local model
+#: the thinking, not the reading, is what a step waits for.
+FOLLOW_UP_SHARE = 0.25
+FOLLOW_UP_FLOOR = 1024
+#: When a turn reaches its tool rounds, it goes on (up to this many more times as many) while it is getting
+#: somewhere: a long build is not stopped half done, but a model going round in circles is.
+ROUND_EXTENSIONS = 2
+#: Tools whose success means the work moved forward.
+CHANGE_TOOLS = ("edit", "write", "write_file", "edit_file", "multi_edit", "notebook_edit", "apply_patch")
+_FAILED = re.compile(r"^(ERROR|\[exit [1-9]\d*\]|Traceback|Not run\.)")
 
 #: The most one request may write beyond its thinking, when it has tools to act with. A model that
 #: has stopped acting and is writing its deliberation out as the answer will otherwise go on for
@@ -198,6 +213,28 @@ def _http_error(exc: Exception) -> str:
     return f"{type(exc).__name__}: {exc}" + (f": {body}" if body else "")
 
 
+def _getting_somewhere(window: List[tuple]) -> bool:
+    """Whether the tool calls since the last check moved the work forward: something was changed
+    successfully, or most calls worked and they were not the same calls over and over."""
+    if not window:
+        return False
+    if any(changed and ok for changed, ok, _ in window):
+        return True
+    worked = sum(1 for _, ok, _ in window if ok) / len(window)
+    distinct = len({key for _, _, key in window}) / len(window)
+    return worked >= 0.6 and distinct >= 0.6
+
+
+def _carries_on(messages: List[Dict]) -> bool:
+    """The request follows tool results that all went fine (none failed, none was refused)."""
+    results = []
+    for m in reversed(messages):
+        if m.get("role") != "tool":
+            break
+        results.append(str(m.get("content") or ""))
+    return bool(results) and not any(_FAILED.match(r.lstrip()) for r in results)
+
+
 class OpenAICompatClient(ModelClient):
     """HTTP client for any OpenAI-compatible chat-completions endpoint."""
 
@@ -237,8 +274,13 @@ class OpenAICompatClient(ModelClient):
         """One request, with the two corrections a reasoning model on a local server needs."""
         messages = normalise_messages(messages)
         params = dict(self.params or {})
+        if getattr(self, "follow_up", True) and _carries_on(messages):
+            for field in BUDGET_FIELDS:
+                if isinstance(params.get(field), int) and params[field] > 0:
+                    params[field] = min(params[field], max(FOLLOW_UP_FLOOR, int(params[field] * FOLLOW_UP_SHARE)))
         if tools and "max_tokens" not in params and not getattr(self, "_no_cap", False):
-            params["max_tokens"] = int(params.get("thinking_budget_tokens") or 0) + ANSWER_TOKENS
+            budget = max(int(params.get(f) or 0) for f in BUDGET_FIELDS)
+            params["max_tokens"] = budget + ANSWER_TOKENS
         try:
             reply = self._send(messages, tools, params)
         except RuntimeError as exc:
@@ -297,7 +339,7 @@ class OpenAICompatClient(ModelClient):
         self.notes.append("The model wrote past the length limit without acting, so it was stopped and asked again.")
         if self.off_effort:
             # it was thinking aloud: ask for the action alone
-            params = {k: v for k, v in params.items() if k != "thinking_budget_tokens"}
+            params = {k: v for k, v in params.items() if k not in BUDGET_FIELDS}
             params["reasoning_effort"] = self.off_effort
         try:
             second = self._send(again, tools, params)
@@ -719,7 +761,23 @@ class AgentLoop:
         text, attached = images.extract(user_message, self.sees_images())
         messages.append({"role": "user", "content": [{"type": "text", "text": text}] + attached if attached else text})
         with_images: Optional[int] = None   # the message holding images from the last tool results
-        for iteration in range(1, self.config.max_iterations + 1):
+        allowance = max(1, int(self.config.max_iterations))
+        limit, extensions, window = allowance, 0, []   # window: (changed something, ok, call) per tool call
+        iteration = 0
+        while True:
+            iteration += 1
+            if iteration > limit:
+                if extensions < ROUND_EXTENSIONS and _getting_somewhere(window):
+                    extensions += 1
+                    limit += allowance
+                    window = []
+                    self.logger.info("round limit reached while making progress: %d more", allowance)
+                    messages.append({"role": "user", "content": (
+                        f"[Progress check, not a message from the user: this request has taken {iteration - 1} "
+                        "tool rounds. You are making progress, so carry on, but keep to the request and finish "
+                        "it; do not start on anything it did not ask for.]")})
+                else:
+                    break
             if self.cancel_requested:
                 self.logger.info("turn cancelled by user")
                 return "[Cancelled by the user.]"
@@ -782,6 +840,9 @@ class AgentLoop:
                     pairs = [(call, self._run_one_tool(call))]
                     index += 1
                 for call, result in pairs:
+                    name_done = _tool_call_name(call)
+                    window.append((name_done in CHANGE_TOOLS, not _FAILED.match(str(result or "").lstrip()),
+                                   name_done + str((call.get("function") or {}).get("arguments") or "")))
                     result, parts = images.extract(result, self.sees_images())
                     shown.extend(parts)
                     messages.append(
@@ -798,12 +859,21 @@ class AgentLoop:
                 ] + shown})
                 with_images = len(messages) - 1
 
-        self.logger.warning("max iterations reached for: %s", user_message[:80])
+        self.logger.warning("round limit reached for: %s", user_message[:80])
         self.memory.log_daily(
-            f"Agent hit the {self.config.max_iterations}-iteration cap on: "
+            f"Agent hit the {limit}-round limit on: "
             f"{user_message[:120]}"
         )
-        return (
-            "[Stopped: reached the maximum number of tool-calling rounds. "
-            "Try breaking the request into smaller steps.]"
-        )
+        # one more request, without tools: where things stand, said by the model that knows
+        messages.append({"role": "user", "content": (
+            f"[Round limit, not a message from the user: this request has used its {limit} tool rounds, "
+            "so no more tools can run now. Without calling tools, tell the user briefly what is done, what "
+            "is left, and what you would do next, so they can say whether to continue.]")})
+        try:
+            wrap = client.chat(messages, [])
+            text = str((wrap["choices"][0]["message"].get("content") or "")).strip()
+        except Exception:  # noqa: BLE001 - the plain stop below says it instead
+            text = ""
+        stop = ("[Stopped: reached the maximum number of tool-calling rounds. "
+                "Say continue to carry on, or break the request into smaller steps.]")
+        return (text + "\n\n" + stop) if text else stop

@@ -25,12 +25,44 @@ def test_auto_effort_fits_the_message():
     assert choose("Add a settings page")[0] == "medium"
 
 
-def test_strata_flash_next_gets_its_own_words_for_effort():
+def test_strata_flash_next_thinks_more_or_less_without_changing_the_start_of_its_prompt():
+    # its template writes low and xhigh into the start of the prompt (the whole conversation would be
+    # read again at every change); medium and none write nothing there, and a budget sets the length
     profile = profile_for("qwen3.8-flash-next-iq3_s")
     assert profile.get("thinking") and profile["efforts"]["off"] == "none"
-    assert reasoning_params(profile, "off") == {"reasoning_effort": "none"}
-    assert reasoning_params(profile, "high") == {"reasoning_effort": "high"}
-    assert reasoning_params(profile, "auto") == {}
+    levels = {e: reasoning_params(profile, e) for e in ("off", "low", "medium", "high", "auto")}
+    assert levels["off"] == {"reasoning_effort": "none", "reasoning_budget_tokens": None}
+    assert {p["reasoning_effort"] for e, p in levels.items() if e != "off"} == {"medium"}
+    budgets = [levels[e]["reasoning_budget_tokens"] for e in ("low", "medium", "high")]
+    assert budgets == sorted(budgets) and budgets[0] >= 1024
+    assert levels["auto"] == levels["medium"], "nothing sent would be the server's own default, with its own start"
+
+
+def test_a_step_after_tool_results_that_went_fine_thinks_less():
+    import agent
+
+    class Echo(agent.OpenAICompatClient):
+        def _send(self, messages, tools, params):
+            self.sent = dict(params)
+            return {"choices": [{"message": {"role": "assistant", "content": "ok"}}]}
+
+    c = Echo("http://127.0.0.1:9/v1", "", "m")
+    c.params = {"reasoning_effort": "medium", "reasoning_budget_tokens": 16384}
+    first = [{"role": "user", "content": "build it"}]
+    fine = first + [{"role": "assistant", "content": "", "tool_calls": []},
+                    {"role": "tool", "tool_call_id": "1", "content": "[exit 0]\nbuilt"}]
+    failed = first + [{"role": "assistant", "content": "", "tool_calls": []},
+                      {"role": "tool", "tool_call_id": "1", "content": "[exit 1]\nerror: missing ;"}]
+    c.chat(first, [])
+    assert c.sent["reasoning_budget_tokens"] == 16384, "the turn's first step plans with the whole budget"
+    c.chat(fine, [])
+    assert c.sent["reasoning_budget_tokens"] == 4096, "carrying on after it worked: a quarter"
+    c.chat(failed, [])
+    assert c.sent["reasoning_budget_tokens"] == 16384, "after a failure: the whole budget again"
+    c.params["reasoning_budget_tokens"] = 1024
+    c.chat(fine, [])
+    assert c.sent["reasoning_budget_tokens"] == 1024, "never below the floor"
+    assert c.params["reasoning_budget_tokens"] == 1024, "the client's own setting is not changed"
     # a model with no word for "none" thinks as little as it can instead
     assert reasoning_params({"thinking": True, "efforts": {"low": "low"}}, "off") == {"reasoning_effort": "low"}
 

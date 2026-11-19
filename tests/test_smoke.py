@@ -424,7 +424,8 @@ def test_agent_max_iterations_guard():
         agent = AgentLoop(config=cfg, registry=reg, client=client, skills=[])
         reply = agent.run("loop forever")
         assert "maximum" in reply.lower(), reply
-        assert client.calls == 3, client.calls
+        # three rounds of the same call: no progress, so no more rounds, and one request (no tools) to wrap up
+        assert client.calls == 4, client.calls
     print("PASS test_agent_max_iterations_guard")
 
 

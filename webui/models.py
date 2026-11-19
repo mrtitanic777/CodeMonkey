@@ -153,9 +153,15 @@ def entry(model_id: str) -> Optional[Dict[str, Any]]:
 
 #: Models served by something else (not downloaded here) whose own words for effort are known.
 #: Strata's Qwen3.8-Flash-Next thinks at its highest by default; it takes none, low, medium, high.
+#: Its template writes "Reasoning effort is set to low/xhigh" at the very start of the prompt, so moving
+#: between those levels makes the server read the whole conversation again. Medium and none write
+#: nothing there, so every level is medium (or none) with a thinking budget instead: the same start
+#: every time, and the budget (reasoning_budget_tokens, which Strata closes the thinking at) sets the length.
 SERVED_PROFILES = [
     {"id": "qwen3.8-flash-next", "match": ["qwen3.8-flash-next", "flash-next"], "thinking": True, "context": 262144,
-     "efforts": {"off": "none", "low": "low", "medium": "medium", "high": "high"}, "calm": "medium"},
+     "efforts": {"off": "none", "low": "medium", "medium": "medium", "high": "medium"}, "calm": "medium",
+     "budget_field": "reasoning_budget_tokens", "budgets": {"low": 1024, "medium": 4096, "high": 16384},
+     "auto_as": "medium"},   # nothing sent would be the server's default level, with its own start
 ]
 
 
@@ -165,7 +171,8 @@ def profile_for(model_name: str) -> Dict[str, Any]:
     for m in SERVED_PROFILES:
         if any(n in low for n in m["match"]):
             return {"sampling": {}, "thinking": True, "context": m["context"], "id": m["id"], "efforts": m["efforts"],
-                    "budget_field": "", "calm": m["calm"], "budgets": {}}
+                    "budget_field": m.get("budget_field", ""), "calm": m["calm"], "budgets": m.get("budgets") or {},
+                    "auto_as": m.get("auto_as", "")}
     for m in CATALOG:
         names = list(m.get("match") or []) + [m["id"]] + ([m["file"].lower().replace("_", "-").rsplit(".", 1)[0]] if m.get("file") else [])
         if any(n and n in low for n in names):
@@ -188,6 +195,8 @@ def reasoning_params(profile: Dict[str, Any], effort: str) -> Dict[str, Any]:
     effort (one accepts low, medium and xhigh and answers "high" with an error), so the words
     come from what is known about the model.
     """
+    if effort == "auto" and profile.get("auto_as"):
+        effort = profile["auto_as"]
     if not profile.get("thinking") or effort not in ("off", "low", "medium", "high"):
         return {}
     words = profile.get("efforts") or _GENERIC_EFFORTS
