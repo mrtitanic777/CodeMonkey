@@ -234,6 +234,12 @@ def _make_read(project_dir: str):
             key = (os.path.normcase(target), int(offset or 1), int(limit or 200))
         except (OSError, ValueError, TypeError):
             return _read(path, offset, limit, project_dir)
+        import images
+
+        if images.is_image(target):
+            # a picture is taken out of the conversation once it has been seen (agent.py): asked
+            # for again, it is not "still above", so it is always sent
+            return _read(path, offset, limit, project_dir)
         before = seen.get(key)
         if (before and before[0] == stat.st_mtime_ns and before[1] == stat.st_size
                 and count[0] - before[2] <= REREAD_WINDOW and not before[3]):
