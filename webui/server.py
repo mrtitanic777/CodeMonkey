@@ -31,7 +31,11 @@ _STATIC_TYPES = {
     ".js": "application/javascript; charset=utf-8",
     ".svg": "image/svg+xml",
     ".woff2": "font/woff2",
+    ".png": "image/png",
+    ".webmanifest": "application/manifest+json",
 }
+#: What a phone may fetch before it is paired: only what putting the app on its Home Screen needs.
+_OPEN_FILES = ("/manifest.webmanifest", "/icon-180.png", "/icon-512.png", "/icon-maskable.png")
 
 _SKIP_DIRS = {
     ".git", "__pycache__", "node_modules", ".venv", "venv", ".mypy_cache",
@@ -224,9 +228,30 @@ class WebHandler(BaseHTTPRequestHandler):
     #: sets once. Without it anyone on the same network could drive the agent.
     access_key: Optional[str] = None
 
+    def _loopback_client(self) -> bool:
+        return self.client_address[0] in ("127.0.0.1", "::1", "::ffff:127.0.0.1")
+
+    def _host_name(self) -> str:
+        host = (self.headers.get("Host") or "").lower()
+        return host.rsplit(":", 1)[0] if not host.startswith("[") else host.split("]")[0] + "]"
+
+    def _forwarded(self) -> bool:
+        """True when a program on this computer passed the request on from somewhere else (Tailscale's
+        https address, or any other proxy): it arrives from this computer, but is not from it."""
+        return any(self.headers.get(h) for h in ("X-Forwarded-For", "Forwarded", "X-Real-IP",
+                                                  "Tailscale-User-Login"))             or self._host_name() not in ("127.0.0.1", "localhost", "[::1]")
+
     def _remote(self) -> bool:
         """True when the request comes from another device, not this computer."""
-        return self.client_address[0] not in ("127.0.0.1", "::1", "::ffff:127.0.0.1")
+        return not self._loopback_client() or self._forwarded()
+
+    def _client_ip(self) -> str:
+        """The device's own address: for a request passed on by a proxy, the one it names."""
+        if self._loopback_client():
+            named = (self.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+            if named:
+                return named[:64]
+        return self.client_address[0]
 
     def handle(self) -> None:
         try:
@@ -255,7 +280,7 @@ class WebHandler(BaseHTTPRequestHandler):
         if not self._remote():
             return True
         # another device: it must be one that was paired, and not disconnected since
-        self._device = self.app.devices.check(self._cookie("cm_dev"), self.client_address[0]) or ""
+        self._device = self.app.devices.check(self._cookie("cm_dev"), self._client_ip()) or ""
         return bool(self._device)
 
     def _let_in(self) -> None:
@@ -268,7 +293,7 @@ class WebHandler(BaseHTTPRequestHandler):
             cookie = ""
         else:
             cookie = "cm_dev=" + self.app.devices.pair(
-                self.headers.get("User-Agent") or "", self.client_address[0])
+                self.headers.get("User-Agent") or "", self._client_ip())
         if cookie:
             self.send_header("Set-Cookie", cookie + "; Path=/; Max-Age=31536000; HttpOnly; SameSite=Strict")
         self.send_header("Content-Length", "0")
@@ -279,7 +304,12 @@ class WebHandler(BaseHTTPRequestHandler):
         note_html = f"<p class=e>{note}</p>" if note else ""
         page = (
             "<!doctype html><html lang=en><meta charset=utf-8>"
-            "<meta name=viewport content='width=device-width,initial-scale=1'><title>CodeMonkey</title>"
+            "<meta name=viewport content='width=device-width,initial-scale=1,viewport-fit=cover'><title>CodeMonkey</title>"
+            "<meta name=theme-color content='#15130f'><meta name=apple-mobile-web-app-capable content=yes>"
+            "<meta name=mobile-web-app-capable content=yes>"
+            "<meta name=apple-mobile-web-app-status-bar-style content=black>"
+            "<meta name=apple-mobile-web-app-title content=CodeMonkey>"
+            "<link rel=apple-touch-icon href=/icon-180.png><link rel=manifest href=/manifest.webmanifest>"
             "<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#15130f;"
             "color:#f1ebe1;font:16px/1.5 system-ui,sans-serif}form{width:min(340px,86vw);text-align:center}"
             "h1{font:400 34px/1.1 Georgia,serif;margin:0 0 6px}h1 i{color:#d26a43}p{color:#b3aa9b;margin:0 0 18px}"
@@ -323,11 +353,14 @@ class WebHandler(BaseHTTPRequestHandler):
         return True
 
     def _addressed_here(self) -> bool:
-        if self._remote():
+        if not self._loopback_client():
             return True   # another device must show the key instead
-        host = (self.headers.get("Host") or "").lower()
-        name = host.rsplit(":", 1)[0] if not host.startswith("[") else host.split("]")[0] + "]"
-        return name in ("127.0.0.1", "localhost", "[::1]") or not self.loopback_only
+        if self._host_name() in ("127.0.0.1", "localhost", "[::1]"):
+            return True
+        # from this computer but addressed to another name: Tailscale's https address passing a
+        # device's request on (it must pair, see _remote), or a web page that pointed a name of its
+        # own at 127.0.0.1, which is turned away
+        return self.app.anywhere.allows(self.headers.get("Host") or "") or not self.loopback_only
 
     def _own_origin(self) -> bool:
         """True unless the request was sent by some other web page.
@@ -437,6 +470,8 @@ class WebHandler(BaseHTTPRequestHandler):
             return self._error("this server only answers to its own address", 403)
         # a page the agent made reads its own data without the key (its sandbox sends no cookies);
         # the address is unguessable and gives nothing but that page's own data
+        if path in _OPEN_FILES:
+            return self._serve_static(path[1:])
         if not re.fullmatch(r"/artifacts/[0-9a-f]+/data", path) and path != "/mcp/oauth/callback" \
                 and self._ask_for_key(path, query):
             return
@@ -528,6 +563,10 @@ class WebHandler(BaseHTTPRequestHandler):
                 if self._remote():   # a paired phone has no use for the code or the link
                     status.update(code="", link="", can_switch=False, remote=True)
                 return self._json(status)
+            if path == "/api/anywhere":
+                if self._remote():
+                    return self._error("only on the computer itself", 403)
+                return self._json(self.app.anywhere.status())
             if path == "/api/devices":
                 rows = self.app.devices.listing(self._device)
                 if self._remote():   # a device sees itself, not the others
@@ -851,6 +890,21 @@ class WebHandler(BaseHTTPRequestHandler):
         if not self._has_key():
             return self._error("this CodeMonkey is private: pair this device first", 401)
         try:
+            if path == "/api/anywhere":
+                if self._remote():
+                    return self._error("only on the computer itself", 403)
+                on = bool(self._read_json().get("enabled"))
+                try:
+                    if on:
+                        self.app.anywhere.start()
+                    else:
+                        self.app.anywhere.stop()
+                except RuntimeError as exc:
+                    return self._error(str(exc), 409)
+                self.app.update_settings({"anywhere_access": on})
+                if on:
+                    self.app.phone.status()   # a pairing code, ready for the phone
+                return self._json(self.app.anywhere.status())
             if path in ("/api/phone", "/api/phone/code", "/api/phone/forget"):
                 if self._remote():
                     return self._error("only on the computer itself", 403)
@@ -969,7 +1023,7 @@ class WebHandler(BaseHTTPRequestHandler):
                 if self._remote():
                     # a paired phone may change how the app behaves, but not which program this
                     # computer will run or where it listens
-                    for key in ("llama_server_path", "phone_access", "statusline_command"):
+                    for key in ("llama_server_path", "phone_access", "anywhere_access", "statusline_command"):
                         changes.pop(key, None)
                 return self._json(self.app.update_settings(changes))
             if path == "/api/jobs":
@@ -1881,6 +1935,16 @@ def serve(app, host: str = "127.0.0.1", port: int = 8080) -> ThreadingHTTPServer
     app.phone.handler = WebHandler
     app.phone.port = server.server_port
     app.phone.bound_all = not WebHandler.loopback_only
+    app.anywhere.port = server.server_port
+    if app.settings.get("anywhere_access"):
+        def _anywhere() -> None:
+            try:
+                st = app.anywhere.start()
+                if st.get("address"):
+                    print(f"From anywhere (Tailscale): {st['address']}")
+            except RuntimeError as exc:
+                print(f"Use from anywhere is switched on but could not start: {exc}")
+        threading.Thread(target=_anywhere, daemon=True, name="anywhere").start()
     if app.phone.bound_all:
         app.phone.new_code()
     elif app.settings.get("phone_access"):

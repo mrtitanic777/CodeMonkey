@@ -64,9 +64,12 @@ function phoneOptions(box) {
       });
     });
     if (!st.can_switch) toggle.disabled = true;
-    box.appendChild(row("srow", "Use from your phone",
-      st.enabled ? "On. Your phone must be on the same Wi-Fi as this computer."
+    box.appendChild(row("srow", "Use from your phone on this Wi-Fi",
+      st.wifi ? "On. Your phone must be on the same Wi-Fi as this computer."
         : "Open CodeMonkey on your phone while it is on the same Wi-Fi. Nothing is reachable until the phone is paired.", toggle));
+    var farRow = row("srow", "Use from anywhere", "Looking for Tailscale…", h("span"));
+    box.appendChild(farRow);
+    anywhereRow(farRow, function () { box._redraw(); });
     if (!st.enabled) { box.appendChild(devBox); devices(); return; }
     var card = h("div", "paircard");
     var img = h("img");
@@ -75,8 +78,10 @@ function phoneOptions(box) {
     card.appendChild(img);
     var text = h("div");
     text.appendChild(h("b", "", "Scan this with your phone's camera"));
-    text.appendChild(h("i", "", "or open this address in the phone's browser and enter the code:"));
-    text.appendChild(h("div", "pairaddr", st.address));
+    text.appendChild(h("i", "", "or open " + (st.anywhere && st.address ? "one of these addresses" : "this address") +
+      " in the phone's browser and enter the code:"));
+    if (st.anywhere) text.appendChild(h("div", "pairaddr", st.anywhere.replace(/^https:\/\//, "")));
+    if (st.address) text.appendChild(h("div", "pairaddr", st.address));
     text.appendChild(h("div", "paircode", st.code.slice(0, 3) + " " + st.code.slice(3)));
     text.appendChild(h("i", "", "The code works once and runs out in " + Math.max(1, Math.round(st.expires_in / 60)) + " minutes. If Windows asks, allow Python on private networks."));
     card.appendChild(text);
@@ -101,6 +106,52 @@ function phoneOptions(box) {
     box.innerHTML = "";
     box.appendChild(h("div", "empty", "Remote control can only be set up on the computer itself."));
   });
+}
+/* "Use from anywhere": CodeMonkey at this computer's private Tailscale https address (anywhere.py).
+   Fills *line* (a settings row) with what Tailscale here is like and a switch. */
+function anywhereRow(line, changed) {
+  var desc = line.querySelector(".sdesc") || line.children[0].children[1] || line.children[0];
+  function say(text, control) {
+    if (desc) desc.textContent = text;
+    var old = line.lastChild;
+    if (control) line.replaceChild(control, old); else line.replaceChild(h("span"), old);
+  }
+  function draw(t) {
+    if (!t.installed) {
+      return say("A private https address your iPhone can open from anywhere, through Tailscale. Install Tailscale on this computer and on the phone, signed in to the same account.",
+        button("Get Tailscale", function () { window.open(t.download, "_blank", "noopener"); }));
+    }
+    if (!t.running && !t.on) {
+      return say("Tailscale is installed but not signed in or not running here. Open Tailscale and sign in, then come back.",
+        button("Check again", function () { api("GET", "/api/anywhere").then(draw).catch(toastError); }));
+    }
+    var on = t.on || t.state === "starting" || t.state === "enable";
+    var sw = toggleControl(on, function (want) {
+      say(want ? "Starting…" : "Stopping…", null);
+      api("POST", "/api/anywhere", { enabled: want }).then(function (n) { draw(n); changed(); }).catch(function (err) {
+        say("It could not be switched on: " + err.message + ".", null);
+      });
+    });
+    if (t.state === "enable") {
+      say("Once only: allow https addresses on your tailnet, on Tailscale's site. This switches on by itself when that's done.", sw);
+      var link = h("a", "", "Allow https on Tailscale");
+      link.href = t.enable_link; link.target = "_blank"; link.rel = "noopener";
+      desc.appendChild(document.createTextNode(" ")); desc.appendChild(link);
+      setTimeout(function () { if (line.isConnected) api("GET", "/api/anywhere").then(function (n) {
+        if (n.state !== "enable") changed(); else draw(n); }).catch(function () {}); }, 4000);
+      return;
+    }
+    if (t.state === "starting") {
+      say("Starting…", sw);
+      setTimeout(function () { if (line.isConnected) api("GET", "/api/anywhere").then(draw).catch(function () {}); }, 2000);
+      return;
+    }
+    if (t.on) return say("On at " + t.address.replace(/^https:\/\//, "") + ". Works wherever your phone has Tailscale on, and voice calls can use its microphone.", sw);
+    say((t.state === "error" && t.message ? t.message + " " : "") +
+      "A private https address your iPhone can open from anywhere, through Tailscale" + (t.host ? " (" + t.host + ")" : "") +
+      ". Only your own devices can reach it, and each still pairs first.", sw);
+  }
+  api("GET", "/api/anywhere").then(draw).catch(function () { say("Tailscale could not be checked.", null); });
 }
 function openRemote() {
   closeMenus();

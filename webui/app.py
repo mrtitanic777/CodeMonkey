@@ -3119,6 +3119,9 @@ class WebApp:
         self.learner = Learner(self)
         # Opening the app on a phone: a second listener, a QR code and a short pairing code.
         self.phone = Phone(self)
+        # The same, from anywhere: a private https address through Tailscale (anywhere.py).
+        from .anywhere import Anywhere
+        self.anywhere = Anywhere()
         self.devices = Devices(self)
         self.models = Models(self)
         from .bench import Bench
@@ -3180,6 +3183,7 @@ class WebApp:
         "lazy_tools",
         "stream",
         "phone_access",
+        "anywhere_access",
         "permission_rules",
         "output_style",
         "statusline_command",
@@ -3253,6 +3257,7 @@ class WebApp:
             "stream": True,
             # Also listen on the local network so a paired phone can open the app.
             "phone_access": False,
+            "anywhere_access": False,
             "ui": {"text_size": "comfortable", "reduce_motion": False, "auto_activity": True,
                    "theme": "warm", "custom_themes": {}, "meter_seconds": 1},
         }
@@ -3365,6 +3370,7 @@ class WebApp:
         settings["lazy_tools"] = bool(settings.get("lazy_tools", True))
         settings["stream"] = bool(settings.get("stream", True))
         settings["phone_access"] = bool(settings.get("phone_access", False))
+        settings["anywhere_access"] = bool(settings.get("anywhere_access", False))
         settings["update_url"] = str(settings.get("update_url") or "").strip()[:500]
         settings["check_updates"] = bool(settings.get("check_updates", True))
         settings["beginner"] = bool(settings.get("beginner", False))

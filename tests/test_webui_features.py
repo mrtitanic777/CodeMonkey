@@ -1342,8 +1342,8 @@ def test_phone_pairs_with_a_short_code_or_a_scanned_link():
 
             # off: this computer works, and nothing listens on the network address
             status, st = http("GET", base + "/api/phone")
-            assert st == {"enabled": False, "address": "", "code": "", "expires_in": 0, "link": "",
-                          "can_switch": True}, st
+            assert st == {"enabled": False, "wifi": False, "address": "", "anywhere": "", "code": "", "expires_in": 0,
+                          "link": "", "can_switch": True}, st
             status, st = http("POST", base + "/api/phone", {"enabled": True})
             assert status == 200 and st["enabled"] and st["address"] == f"{lan}:{port}" and len(st["code"]) == 6, st
             assert app.settings["phone_access"] is True

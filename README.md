@@ -45,6 +45,9 @@ checked. It is laid out like Claude Code's desktop app, with a calmer, glassier 
   become cards that play when clicked. It can watch a video file as frames and read what is said.
 - **Keep talking while it works.** Send a message while a command runs: the command carries on in the
   background, your message is answered, and you hear when the command finishes.
+- **On your iPhone, anywhere.** Pair a phone with a code from Settings and add CodeMonkey to its Home
+  Screen: it opens full screen, like an app. Through [Tailscale](https://tailscale.com) it works away
+  from home too, at a private https address only your devices can reach.
 - **Terminal, files and git beside the chat.** Run commands, browse the project, commit.
 - **Permissions you choose.** Asks first, edits without asking, plans first, or never asks.
 - **Beginner mode.** One small step at a time, programming words explained, questions with buttons.

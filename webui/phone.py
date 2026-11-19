@@ -53,12 +53,20 @@ class Phone:
 
     # ------------------------------------------------------------ listen ---
 
-    def enabled(self) -> bool:
+    def on_wifi(self) -> bool:
         return self.bound_all or self.server is not None
+
+    def anywhere(self) -> str:
+        """The Tailscale https address when CodeMonkey is served there (anywhere.py), else ""."""
+        place = getattr(self.app, "anywhere", None)
+        return f"https://{place.host}" if place is not None and place.on and place.host else ""
+
+    def enabled(self) -> bool:
+        return self.on_wifi() or bool(self.anywhere())
 
     def start(self) -> None:
         """Listen on the local-network address too. Raises RuntimeError when that cannot be done."""
-        if self.enabled():
+        if self.on_wifi():
             return
         if self.handler is None or self.port is None:
             raise RuntimeError("the app is not serving yet")
@@ -128,13 +136,19 @@ class Phone:
         on = self.enabled()
         if on and (not self.code or time.time() > self.expires or self.fails >= MAX_TRIES):
             self.new_code()
-        address = f"{lan_address()}:{self.port}" if self.port else ""
+        wifi = self.on_wifi()
+        address = f"{lan_address()}:{self.port}" if self.port and wifi else ""
+        far = self.anywhere()
+        # the QR code opens the address that works everywhere, when there is one
+        link = (f"{far}/?key={self.link_token}" if far else f"http://{address}/?key={self.link_token}") if on else ""
         return {
             "enabled": on,
-            "address": address if on else "",
+            "wifi": wifi,
+            "address": address,
+            "anywhere": far,
             "code": self.code if on else "",
             "expires_in": max(0, int(self.expires - time.time())) if on else 0,
-            "link": f"http://{address}/?key={self.link_token}" if on else "",
+            "link": link,
             "can_switch": not self.bound_all,
         }
 
@@ -145,8 +159,8 @@ class Phone:
         st = self.status()
         if not st["enabled"]:
             return
-        print(f"On your phone (same Wi-Fi): open http://{st['address']} and enter the code "
-              f"{st['code'][:3]} {st['code'][3:]}")
+        where = (f"open http://{st['address']} (same Wi-Fi)" if st["address"] else "") +             (" or " if st["address"] and st["anywhere"] else "") +             (f"open {st['anywhere']} (anywhere, with Tailscale)" if st["anywhere"] else "")
+        print(f"On your phone: {where} and enter the code {st['code'][:3]} {st['code'][3:]}")
         print("Or scan this with the phone's camera:")
         try:
             print(qr.text_blocks(st["link"]))

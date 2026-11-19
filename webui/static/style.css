@@ -1883,3 +1883,22 @@ html.noglass .welcome, html.noglass .nomodel { background: var(--panel); }
 .cbtn.cend { background: #e5484d; border-color: #e5484d; color: #fff; }
 .cbtn.cend svg { fill: currentColor; stroke: none; transform: rotate(135deg); }
 .cbtn:hover { filter: brightness(1.12); }
+
+/* 23. On a phone, and on its Home Screen (an iPhone web app): nothing under the home bar, the notch
+   or rounded corners; text boxes big enough that iOS does not zoom in on them; taps without a grey flash. */
+html { -webkit-text-size-adjust: 100%; }
+body { -webkit-tap-highlight-color: transparent; }
+.app { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+.dock { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+@media (max-width: 1000px) { .dock { padding-bottom: calc(12px + env(safe-area-inset-bottom)); } }
+.rail { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+.top { padding-top: env(safe-area-inset-top); height: calc(53px + env(safe-area-inset-top)); }
+@media (max-width: 560px) {
+  .menu.up, .menu.pop { bottom: calc(132px + env(safe-area-inset-bottom)); }
+  .scrim { padding: calc(10px + env(safe-area-inset-top)) 10px calc(10px + env(safe-area-inset-bottom)); }
+}
+@media (hover: none) and (pointer: coarse) {
+  input, textarea, select { font-size: max(16px, 1em) !important; }
+  #input { scrollbar-width: none; }
+  #input::-webkit-scrollbar { display: none; }
+}
