@@ -22,6 +22,10 @@ checked. It is laid out like Claude Code's desktop app, with a calmer, glassier 
 <td width="50%" valign="top"><h3>Honest replies</h3>Each answer says how much of it was checked against your files, and what was a guess.<br><br><img src="docs/images/reply-and-undo.png" alt="A reply with its checked-against-your-files line and the changes card"></td>
 <td width="50%" valign="top"><h3>Light or dark</h3>Glass panels over a softly moving background, in either theme.<br><br><img src="docs/images/light.png" alt="The same conversation in the light theme"></td>
 </tr>
+<tr>
+<td width="50%" valign="top"><h3>Call it</h3>Talk, and it answers out loud in a lifelike voice made on your computer. Talk over it to interrupt.<br><br><img src="docs/images/voice-call.png" alt="A voice call: the conversation so far, and the call bar speaking the answer"></td>
+<td width="50%" valign="top"><h3>Pictures and videos</h3>Replies show pictures the AI saved, and videos as cards that play when clicked.<br><br><img src="docs/images/pictures-and-videos.png" alt="A reply with a chart of test times and a card for a YouTube video"></td>
+</tr>
 </table>
 
 ## Everything it does
@@ -34,11 +38,20 @@ checked. It is laid out like Claude Code's desktop app, with a calmer, glassier 
 - **Fix it for me.** When something you run fails, a card says what broke in plain words and points
   at the line. One button hands it to the AI, which fixes it, runs it again and reports back.
 - **Honest replies.** Each answer says how much of it was checked against your files and what was a guess.
+- **Call it.** The phone button starts a voice call: talk, and it answers out loud in a lifelike voice,
+  hands free, until you hang up. Hearing (whisper.cpp) and the voice (Kokoro) run on your computer;
+  Settings sets them up with one button.
+- **Pictures and videos.** Replies show pictures the AI saved from the web; YouTube and Vimeo links
+  become cards that play when clicked. It can watch a video file as frames and read what is said.
+- **Keep talking while it works.** Send a message while a command runs: the command carries on in the
+  background, your message is answered, and you hear when the command finishes.
 - **Terminal, files and git beside the chat.** Run commands, browse the project, commit.
 - **Permissions you choose.** Asks first, edits without asking, plans first, or never asks.
 - **Beginner mode.** One small step at a time, programming words explained, questions with buttons.
-- **Bring your own model.** Any OpenAI-compatible endpoint (OpenAI, OpenRouter, Ollama, LM Studio, vLLM),
-  Anthropic's API, or a [KeSSie](https://github.com/philtimmes/KeSSie) server. Keys stay on your computer.
+- **Bring your own model.** Any OpenAI-compatible endpoint (OpenAI, OpenRouter, Ollama, LM Studio, vLLM,
+  Strata), Anthropic's API, or a [KeSSie](https://github.com/philtimmes/KeSSie) server. Keys stay on your computer.
+- **Made for models on your computer too.** Thinking fitted to each message, fewer tools up front, the
+  server's live state while it reads, and a model server that starts with CodeMonkey.
 
 ## Install
 
@@ -49,6 +62,7 @@ everything it needs, Python too. Linux and Raspberry Pi builds are `.tar.gz` fil
 ## Run from source
 
 Needs **Python 3.10+** (standard library only, no `pip install`) and, for the desktop window, **Node.js**.
+Voice calls add the `kokoro-onnx` package, which Settings installs for you.
 
 ```bash
 # in a browser

@@ -1123,6 +1123,14 @@ function drawUsageChart(box, days, table) {
 
 /* What's new: each version's changes in plain words, newest first. */
 var WHATS_NEW = [
+  ["0.0.4", "November 2026", [
+    ["Voice calls", "The phone button by the message box starts a call: talk, and the AI answers out loud in a lifelike voice (Kokoro), made on this computer. Talk over it to interrupt. Settings > General sets it up and picks the voice."],
+    ["Pictures and videos", "Replies can show pictures the AI saved from the web, and YouTube or Vimeo links become cards that play when clicked. The AI can watch a video file as frames and read what is said in it."],
+    ["Keep talking while it works", "Send a message while a command runs and the command carries on in the background; your message is answered, and you hear when the command finishes."],
+    ["Better with a model on this computer", "Thinking fitted to each message, fewer tools offered up front (lean mode), the server's live state while it reads, side requests kept out of its cache, and a model server can start with CodeMonkey."],
+    ["Comes back as it was", "After a crash or a forced close, the session, the draft you were typing and the pane you had open come back."],
+    ["Faster", "Tool calls that only read run at the same time, search uses ripgrep when it is installed, and replies stream with less overhead."]
+  ]],
   ["0.0.3", "November 2026", [
     ["Leaner", "Parts of CodeMonkey nothing used any more are gone, and the README has new pictures."],
     ["CODEMONKEY_API_KEY", "The environment variable for a default key has CodeMonkey's own name now (the old name still works)."]

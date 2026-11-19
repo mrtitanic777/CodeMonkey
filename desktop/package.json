@@ -1,7 +1,7 @@
 {
   "name": "codemonkey-desktop",
   "productName": "CodeMonkey",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "CodeMonkey in its own window: starts the Python web UI and shows it in Electron.",
   "main": "main.js",
   "private": true,
