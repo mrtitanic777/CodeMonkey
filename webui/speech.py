@@ -74,9 +74,25 @@ DEFAULT_VOICE = "af_heart"
 _KOKORO = {"engine": None, "error": "", "from": "", "lock": threading.Lock()}
 
 
+def packages_dir() -> str:
+    """Where Settings installs the voice's Python packages: in the speech folder, not the app."""
+    return os.path.join(speech_dir(), "python")
+
+
+def use_packages() -> None:
+    """Let Python find the packages Settings installed (the folder is added once, when it exists)."""
+    import sys
+
+    folder = packages_dir()
+    if os.path.isdir(folder) and folder not in sys.path:
+        sys.path.append(folder)
+
+
 def kokoro_files() -> Optional[Tuple[str, str]]:
     """(Kokoro's model, its voices file), when both are there and the kokoro-onnx package is installed."""
     import importlib.util
+
+    use_packages()
 
     base = os.path.join(speech_dir(), "kokoro")
     models = sorted(glob.glob(os.path.join(base, "kokoro-*.onnx")), key=lambda p: (".int8" in p, ".fp16" in p, p))

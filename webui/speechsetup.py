@@ -47,6 +47,9 @@ VOICE_FILES = [
 ]
 #: about what pip fetches for kokoro-onnx (onnxruntime and the phonemizer), for the size shown first
 VOICE_PACKAGE_BYTES = 45_000_000
+#: pip as one file, for a Python that has no pip (the installers ship Python without it)
+PIP_APP = ("https://bootstrap.pypa.io/pip/zipapp/pip-26.2.2.pyz", 1762217,
+           "e5ef64ef63ff89a746014ad81658b76c1940385fdcdbc4fcbfa6e3ef1887352d")
 
 
 def this_platform() -> tuple:
@@ -74,6 +77,7 @@ def plan(parts: List[str], bases: Optional[Dict[str, str]] = None) -> List[dict]
     if "voice" in parts and speech.kokoro_files() is None:
         import importlib.util
 
+        speech.use_packages()
         if importlib.util.find_spec("kokoro_onnx") is None:
             items.append({"what": "kokoro-onnx Python package", "size": VOICE_PACKAGE_BYTES, "kind": "pip",
                           "package": "kokoro-onnx"})
@@ -166,21 +170,27 @@ class Setup:
                 os.remove(part)
 
     def _pip(self, package: str) -> None:
-        in_venv = sys.prefix != getattr(sys, "base_prefix", sys.prefix)
-        args = [sys.executable, "-m", "pip", "install", "--disable-pip-version-check", "-q", package]
-        if not in_venv:
-            args.insert(4, "--user")
-        done = subprocess.run(args, capture_output=True, text=True, errors="replace", timeout=1800,
+        """Install *package* into the speech folder (never the app's own Python). A Python without pip
+        (the installers ship one) uses pip's official one-file build, checked like everything else."""
+        import importlib
+        import importlib.util
+
+        target = speech.packages_dir()
+        os.makedirs(target, exist_ok=True)
+        if importlib.util.find_spec("pip") is not None:
+            pip = [sys.executable, "-m", "pip"]
+        else:
+            url, size, digest = PIP_APP
+            app = os.path.join(speech.speech_dir(), os.path.basename(url))
+            if not os.path.isfile(app):
+                self._fetch({"url": url, "size": size, "sha256": digest, "kind": "file", "dest": app})
+            pip = [sys.executable, app]
+        done = subprocess.run(pip + ["install", "--disable-pip-version-check", "-q", "--target", target, package],
+                              capture_output=True, text=True, errors="replace", timeout=1800,
                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         if done.returncode != 0:
             raise RuntimeError("pip could not install " + package + ": " + (done.stderr or done.stdout)[-400:])
-        import importlib
-        import site
-
-        # a user folder made by this install was not there when Python started, so it is not looked in yet
-        user_site = site.getusersitepackages() if not in_venv else ""
-        if user_site and os.path.isdir(user_site) and user_site not in sys.path:
-            sys.path.append(user_site)
+        speech.use_packages()
         importlib.invalidate_caches()
 
 
