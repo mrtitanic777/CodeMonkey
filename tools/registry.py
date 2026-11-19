@@ -47,6 +47,59 @@ class Tool:
         }
 
 
+#: Names other coding agents give the tools here. Models trained on those reach for them; the
+#: first name in each list that is registered is the one run.
+TOOL_ALIASES: Dict[str, tuple] = {
+    "read_file": ("read",), "view": ("read",), "view_file": ("read",), "cat": ("read",), "open_file": ("read",),
+    "file_read": ("read",), "readfile": ("read",),
+    "str_replace": ("edit",), "str_replace_editor": ("edit",), "replace": ("edit",), "edit_file": ("edit",),
+    "apply_edit": ("edit",), "replace_in_file": ("edit",), "search_replace": ("edit",), "file_edit": ("edit",),
+    "write": ("write_file",), "create_file": ("write_file",), "file_write": ("write_file",),
+    "writefile": ("write_file",), "save_file": ("write_file",),
+    "shell": ("bash",), "run": ("bash",), "run_command": ("bash",), "execute": ("bash",),
+    "execute_command": ("bash",), "terminal": ("bash",), "cmd": ("bash",), "powershell": ("bash",),
+    "run_shell_command": ("bash",), "exec": ("bash",),
+    "search": ("grep",), "ripgrep": ("grep",), "rg": ("grep",), "search_files": ("grep",), "grep_search": ("grep",),
+    "find_files": ("glob",), "list_files": ("glob",), "find": ("glob",), "file_search": ("glob",),
+    "todowrite": ("todo_write",), "todo": ("todo_write",), "update_todos": ("todo_write",),
+}
+#: Argument names other agents use, mapped to the ones here (used only when the tool takes the
+#: target name and the call did not give it already).
+ARG_ALIASES: Dict[str, tuple] = {
+    "path": ("file_path", "filepath", "filename", "file", "target_file", "absolute_path", "relative_path"),
+    "old_text": ("old_string", "old_str", "old", "search", "find", "original", "old_content", "search_text"),
+    "new_text": ("new_string", "new_str", "new", "replace", "replacement", "new_content", "replace_text"),
+    "content": ("contents", "text", "file_text", "data", "body", "code"),
+    "cmd": ("command", "cmdline", "script", "shell_command"),
+    "pattern": ("query", "regex", "glob", "search_pattern"),
+    "offset": ("start_line", "line", "from_line", "start"),
+    "limit": ("lines", "max_lines", "num_lines", "count"),
+}
+
+
+def _alias_arguments(tool: "Tool", arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """The call's arguments under the names this tool takes: a wrapper object unwrapped
+    ({"arguments": {...}}), and another agent's names (file_path, old_string) renamed."""
+    props = set(((tool.parameters or {}).get("properties") or {}).keys())
+    if not props or not isinstance(arguments, dict):
+        return arguments
+    if len(arguments) == 1:
+        (only, inner), = arguments.items()
+        if only not in props and only in ("arguments", "args", "parameters", "params", "input") \
+                and isinstance(inner, dict):
+            arguments = inner
+    if set(arguments) <= props:
+        return arguments
+    out = dict(arguments)
+    for target, others in ARG_ALIASES.items():
+        if target in props and target not in out:
+            for other in others:
+                if other in out and other not in props:
+                    out[target] = out.pop(other)
+                    break
+    return out
+
+
 def _known_arguments(func: Callable[..., Any], arguments: Dict[str, Any]):
     """(the arguments *func* takes, the names of the others). A function with **kwargs takes all.
 
@@ -171,6 +224,20 @@ class ToolRegistry:
     def names(self) -> List[str]:
         return sorted(self.tools)
 
+    def resolve_name(self, name: str) -> Optional[str]:
+        """The registered tool an unknown *name* plainly means, or None."""
+        raw = str(name or "").strip()
+        for prefix in ("functions.", "functions:", "tools.", "tool."):
+            if raw.lower().startswith(prefix):
+                raw = raw[len(prefix):]
+        plain = raw.lower().replace("-", "_").replace(" ", "_")
+        if plain in self.tools:
+            return plain
+        for candidate in TOOL_ALIASES.get(plain, ()):
+            if candidate in self.tools:
+                return candidate
+        return None
+
     def schemas(self) -> List[Dict[str, Any]]:
         return [self.tools[name].schema() for name in self.names()]
 
@@ -183,10 +250,17 @@ class ToolRegistry:
         """
         tool = self.tools.get(name)
         if tool is None:
-            return (
-                f"ERROR: unknown tool {name!r}. "
-                f"Available tools: {', '.join(self.names())}"
-            )
+            # a model on this computer often uses another program's name for a tool it has
+            # (read_file, str_replace, run_command): run the one it plainly meant
+            resolved = self.resolve_name(name)
+            tool = self.tools.get(resolved) if resolved else None
+            if tool is None:
+                return (
+                    f"ERROR: unknown tool {name!r}. "
+                    f"Available tools: {', '.join(self.names())}"
+                )
+            name = resolved
+        arguments = _alias_arguments(tool, arguments)
         if tool.needs_approval and not self.auto_approve:
             arg_preview = ", ".join(
                 f"{k}={str(v)[:60]!r}" for k, v in arguments.items()

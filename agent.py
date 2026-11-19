@@ -213,6 +213,81 @@ def _http_error(exc: Exception) -> str:
     return f"{type(exc).__name__}: {exc}" + (f": {body}" if body else "")
 
 
+_TEXT_CALL = re.compile(r"<tool_call>\s*(.*?)\s*(?:</tool_call>|$)", re.S)
+_XML_FUNCTION = re.compile(r"<function=([^>\s]+)>\s*(.*?)\s*(?:</function>|$)", re.S)
+_XML_PARAM = re.compile(r"<parameter=([^>\s]+)>\n?(.*?)\n?</parameter>", re.S)
+
+
+def text_tool_calls(content: str) -> tuple:
+    """Tool calls a model wrote into its answer instead of sending them as calls: the server turns
+    these into calls only for the tools it was offered, so a call to one that is loaded on request
+    (lean mode) came back as text, and the user was shown raw <tool_call> markup as the reply.
+    Reads Qwen's XML form (<function=name><parameter=key>value</parameter>) and the JSON form
+    ({"name": ..., "arguments": {...}}). Returns (the text without them, [calls])."""
+    text = str(content or "")
+    if "<tool_call>" not in text:
+        return text, []
+    calls = []
+    for n, block in enumerate(_TEXT_CALL.findall(text)):
+        name, args = "", {}
+        fn = _XML_FUNCTION.search(block)
+        if fn:
+            name = fn.group(1).strip()
+            for key, value in _XML_PARAM.findall(fn.group(2)):
+                value = value.strip("\n")
+                if value[:1] in "[{" or value in ("true", "false", "null") or re.fullmatch(r"-?\d+(\.\d+)?", value):
+                    try:
+                        value = json.loads(value)
+                    except ValueError:
+                        pass
+                args[key.strip()] = value
+        else:
+            try:
+                data = _lenient_json(block)
+                name = str(data.get("name") or "")
+                args = data.get("arguments") or data.get("parameters") or {}
+                if isinstance(args, str):
+                    args = _lenient_json(args)
+            except (ValueError, AttributeError):
+                continue
+        if name:
+            calls.append({"id": f"text_call_{n}", "type": "function",
+                          "function": {"name": name, "arguments": json.dumps(args)}})
+    rest = _TEXT_CALL.sub("", text).strip() if calls else text
+    return rest, calls
+
+
+def _lenient_json(text: str) -> Any:
+    """Tool arguments as a model on this computer writes them: JSON, or nearly. Tried in order:
+    as sent; with raw newlines and tabs inside strings allowed; without a code fence around it;
+    without trailing commas; as a Python literal (single quotes, True/None). The first that reads wins;
+    if none does, the strict parser's error is raised."""
+    import ast
+
+    text = text.strip()
+    try:
+        return json.loads(text or "{}")
+    except json.JSONDecodeError as first:
+        error = first
+    tries = [text]
+    fenced = re.match(r"^```[a-zA-Z]*\s*(.*?)\s*```$", text, re.S)
+    if fenced:
+        tries.append(fenced.group(1))
+    tries += [re.sub(r",\s*([}\]])", r"\1", t) for t in list(tries)]
+    for t in tries:
+        try:
+            return json.loads(t, strict=False)
+        except json.JSONDecodeError:
+            pass
+        try:
+            value = ast.literal_eval(t)
+            if isinstance(value, dict):
+                return value
+        except (ValueError, SyntaxError, MemoryError, RecursionError):
+            pass
+    raise error
+
+
 def _getting_somewhere(window: List[tuple]) -> bool:
     """Whether the tool calls since the last check moved the work forward: something was changed
     successfully, or most calls worked and they were not the same calls over and over."""
@@ -653,12 +728,16 @@ class AgentLoop:
         func = call.get("function", {}) or {}
         name = func.get("name", "")
         raw_args = func.get("arguments") or "{}"
-        try:
-            args = json.loads(raw_args)
-            if not isinstance(args, dict):
-                raise ValueError("arguments must be an object")
-        except (json.JSONDecodeError, ValueError) as exc:
-            return f"ERROR: invalid tool arguments: {exc}"
+        if isinstance(raw_args, dict):
+            args = raw_args
+        else:
+            try:
+                args = _lenient_json(str(raw_args))
+                if not isinstance(args, dict):
+                    raise ValueError("arguments must be an object")
+            except (json.JSONDecodeError, ValueError) as exc:
+                return (f"ERROR: invalid tool arguments: {exc}. Send the arguments as one JSON object, "
+                        "for example {\"path\": \"app.py\"}.")
         self.logger.info("tool call: %s %s", name, str(args)[:200])
         return self.registry.execute(name, args)
 
@@ -760,6 +839,9 @@ class AgentLoop:
         messages.extend(history or [])
         text, attached = images.extract(user_message, self.sees_images())
         messages.append({"role": "user", "content": [{"type": "text", "text": text}] + attached if attached else text})
+        # the whole turn as it is sent, tool steps and all: a follow-up in the same turn (the reply
+        # check) carries on from it, so a local server reads only what is new
+        self.last_messages = messages
         with_images: Optional[int] = None   # the message holding images from the last tool results
         allowance = max(1, int(self.config.max_iterations))
         limit, extensions, window = allowance, 0, []   # window: (changed something, ok, call) per tool call
@@ -801,6 +883,11 @@ class AgentLoop:
                 return f"[Error: malformed model response: {exc}]"
 
             tool_calls = msg.get("tool_calls") or []
+            if not tool_calls and "<tool_call>" in str(msg.get("content") or ""):
+                rest, found = text_tool_calls(msg.get("content"))
+                if found:
+                    msg = dict(msg, content=rest or None, tool_calls=found)
+                    tool_calls = found
             messages.append(
                 {
                     "role": "assistant",

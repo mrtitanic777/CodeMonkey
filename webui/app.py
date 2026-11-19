@@ -218,6 +218,16 @@ VOICE_NOTE = (
     "mistakes in it.]")
 
 
+#: The most of the project pack (context/packs.py) a model on this computer is sent; 30,000 otherwise.
+LEAN_PACK_CHARS = 8000
+
+#: Added to a bigger request, for a model on this computer (Session._wants_checklist).
+CHECKLIST_NOTE = (
+    "[This is a bigger request. First write a short checklist of its steps with todo_write (3 to 8 items, "
+    "only what the request asks for), then work through it, marking each item in_progress and then "
+    "completed as you go. Finish every item before you reply.]")
+
+
 def tool_group(name: str) -> str:
     if name.startswith("browser_"):
         return "browser"
@@ -902,7 +912,14 @@ class WebSession:
                 pack = load_pack(
                     self.project_dir, os.path.join(app.workspace, "packs")
                 )
-                pack_prefix = render_prefix(pack)
+                # a model on this computer reads a new prompt at a few hundred tokens a second, and the
+                # pack leads every session's first request: a smaller one (the best-ranked files, their
+                # summaries and functions) starts a session in seconds instead of half a minute
+                try:
+                    local = self.lean()
+                except Exception:  # noqa: BLE001 - settings not ready: the full pack
+                    local = False
+                pack_prefix = render_prefix(pack, max_chars=LEAN_PACK_CHARS) if local else render_prefix(pack)
             except Exception:  # noqa: BLE001 - packs are best-effort
                 pack_prefix = None
 
@@ -1102,6 +1119,8 @@ class WebSession:
             self.ledger.note_tool(name, args, text, time.monotonic() - began)
             if not stuck:
                 mark = f"{len(text)}:{hash(text)}"
+                if text.startswith("(unchanged: ") and streak[0] == call_key:
+                    mark = streak[1]   # "the same as before" (coder/tools.py, _make_read) is the same result
                 same = streak[0] == call_key and streak[1] == mark
                 self._same_call = (call_key, mark, streak[2] + 1 if same else 1)
                 if same and self._same_call[2] == 3:
@@ -1257,6 +1276,22 @@ class WebSession:
             func=load,
         ))
         registry.schemas = offered  # type: ignore[method-assign]
+
+    def _wants_checklist(self, text: str) -> bool:
+        """A bigger piece of work, for a model on this computer, with no checklist going yet: it is
+        asked to write one first (CHECKLIST_NOTE). Over a hundred rounds a small model loses track of
+        what is left; a checklist it ticks off keeps the rest of the request in view (the working set
+        shows it again as it goes, webui/workingset.py)."""
+        from .effort import choose
+
+        if not self.lean() or not self.app.settings.get("checklist_for_big_tasks", True):
+            return False
+        if self.loop.registry.get("todo_write") is None:
+            return False
+        if any(t.get("status") != "completed" for t in (getattr(self.todo_state, "items", None) or [])):
+            return False
+        words = len(str(text or "").split())
+        return choose(text)[0] == "high" and words >= 25 and not str(text).lstrip().startswith("/")
 
     def lean(self) -> bool:
         """Lean mode: the model in use runs on this computer, and the setting is on (the default)."""
@@ -2357,6 +2392,8 @@ class WebSession:
                 full_text += "\n\n" + "\n".join(f"[hook note] {n}" for n in decided["notes"])
             if self._voice:
                 full_text += "\n\n" + VOICE_NOTE
+            elif self._wants_checklist(text):
+                full_text += "\n\n" + CHECKLIST_NOTE
         self._turn_steps = 0
         self.loop.cancel_requested = False
         self.changes.begin(turn_id)
@@ -2549,6 +2586,20 @@ class WebSession:
         say(f"Looping {words}: {task[:160]}. Each run is unattended and read-only, and reports here only when "
             "there is something to say. It runs while CodeMonkey is running. End it with /loop stop.")
 
+    def _turn_so_far(self, full_text: str, reply: str) -> List[Dict]:
+        """The conversation to carry on from within this turn: everything the model was sent, its tool
+        steps included, and its reply. Rebuilt from the saved history instead (the turn's message and
+        reply only), the conversation would change part way through, and a model server on this
+        computer would read all of it again (measured: 6,364 tokens, 15 seconds, for one reply check)."""
+        turn = list(getattr(self.loop, "last_messages", None) or [])
+        if not turn or turn[0].get("role") != "system":
+            return self.history + [{"role": "user", "content": full_text}, {"role": "assistant", "content": reply}]
+        turn = turn[1:]
+        last = turn[-1] if turn else {}
+        if not (last.get("role") == "assistant" and not last.get("tool_calls")):
+            turn.append({"role": "assistant", "content": reply})   # the reply as sent is kept, never rewritten
+        return turn
+
     def _enforce_reply(self, reply: str, full_text: str) -> str:
         """The reply gate: unbacked results and work that was not done do not reach you."""
         from . import replygate
@@ -2573,11 +2624,7 @@ class WebSession:
                                          + "; ".join(c["text"] for c in found[:3])
                                          + "). It was sent back to be backed or withdrawn."})
                 self._stream_text = ""
-                second = self.loop.run(
-                    replygate.correction(found, broken),
-                    history=self.history + [{"role": "user", "content": full_text},
-                                            {"role": "assistant", "content": reply}],
-                )
+                second = self.loop.run(replygate.correction(found, broken), history=self._turn_so_far(full_text, reply))
                 if second and not second.startswith(("[Error", "[Cancelled", "[Stopped")):
                     reply = second
                 still = replygate.hard(self.ledger.label_reply(reply))

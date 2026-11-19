@@ -51,9 +51,18 @@ def _rel(project_dir: str, abs_path: str) -> str:
 
 
 def _truncate(text: str, limit: int = _MAX_OUTPUT) -> str:
-    if len(text) > limit:
-        return text[:limit] + f"\n... [truncated, {len(text) - limit} more chars]"
-    return text
+    """The start and, mostly, the end of a long output: a build's or a test run's errors and its
+    summary are at the bottom, so cutting the end off hid exactly what the model needed."""
+    if len(text) <= limit:
+        return text
+    head = limit // 3
+    tail = limit - head
+    start = text[:head]
+    start = start[: start.rfind("\n")] if "\n" in start else start
+    end = text[-tail:]
+    end = end[end.find("\n") + 1:] if "\n" in end else end
+    cut = len(text) - len(start) - len(end)
+    return f"{start}\n... [{cut} chars cut from the middle; the end is below] ...\n{end}"
 
 
 # ------------------------------------------------------------ ignores ---
@@ -205,6 +214,38 @@ def _read(path: str, offset: int = 1, limit: int = 200, project_dir: str = ".") 
     if not lines:
         return f"(file {path!r} has fewer than {offset} lines)"
     return "\n".join(lines)
+
+
+#: A read of the same lines of a file that has not changed, within this many reads of the last one,
+#: is answered with a short note: those lines are still in the conversation, and on a model on this
+#: computer every repeated line is read again. A second request right after the note gets it all.
+REREAD_WINDOW = 12
+
+
+def _make_read(project_dir: str):
+    seen: Dict[tuple, tuple] = {}   # (file, offset, limit) -> (mtime, size, read number, noted)
+    count = [0]
+
+    def read(path: str, offset: Any = 1, limit: Any = 200) -> str:
+        count[0] += 1
+        try:
+            target = _resolve_project(project_dir, path)
+            stat = os.stat(target)
+            key = (os.path.normcase(target), int(offset or 1), int(limit or 200))
+        except (OSError, ValueError, TypeError):
+            return _read(path, offset, limit, project_dir)
+        before = seen.get(key)
+        if (before and before[0] == stat.st_mtime_ns and before[1] == stat.st_size
+                and count[0] - before[2] <= REREAD_WINDOW and not before[3]):
+            seen[key] = (stat.st_mtime_ns, stat.st_size, before[2], True)
+            ago = count[0] - before[2]
+            return (f"(unchanged: {path!r} lines {key[1]}-{key[1] + key[2] - 1} are the same as when you read them "
+                    f"{ago} read{'s' if ago != 1 else ''} ago, still above in this conversation. Use them, read "
+                    "other lines, or read it once more to have them sent again.)")
+        seen[key] = (stat.st_mtime_ns, stat.st_size, count[0], False)
+        return _read(path, offset, limit, project_dir)
+
+    return read
 
 
 # ----------------------------------------------------------------- git ---
@@ -638,6 +679,38 @@ def _compute_edit(body: str, old_text: str, new_text: str):
     return _apply_line_replace(body, idx, len(old_lines), shifted), True
 
 
+def _closest(body: str, old_text: str, shown: int = 12) -> str:
+    """Where the file has the lines most like old_text, numbered, so the next try copies them
+    exactly instead of guessing again from memory."""
+    lines = body.splitlines()
+    want = [ln for ln in old_text.splitlines() if ln.strip()]
+    if not lines or not want:
+        return " Re-read the file and copy the block exactly."
+    first = _squash(want[0])
+    best, best_score = 0, -1.0
+    for i, line in enumerate(lines):
+        score = difflib.SequenceMatcher(None, first, _squash(line)).ratio()
+        if score > best_score:
+            best, best_score = i, score
+    if best_score < 0.45:
+        return (" Nothing in the file looks like its first line; re-read the file (it may have changed) "
+                "and copy the block exactly.")
+    start = max(0, best - 2)
+    end = min(len(lines), start + max(shown, len(want) + 4))
+    numbered = "\n".join(f"{n + 1:6d}\t{lines[n]}" for n in range(start, end))
+    return (f" The closest lines in the file are {start + 1}-{end} (as they are now):\n{numbered}\n"
+            "Copy old_text from these lines exactly (without the line numbers), then try again.")
+
+
+def _check_note(target: str, shown: str) -> str:
+    try:
+        from coder import checks
+
+        return checks.note(target, repr(shown))
+    except Exception:  # noqa: BLE001 - a check must never break a write
+        return ""
+
+
 def _diff_preview(project_dir: str, path: str, old_text: str, new_text: str) -> str:
     """Render the pending edit as a stat line plus unified diff.
 
@@ -669,17 +742,20 @@ def _make_edit(project_dir: str, tracker: Any):
             return f"ERROR: file not found: {path!r}"
         with open(target, "r", encoding="utf-8", errors="replace") as fh:
             body = fh.read()
+        if not old_text:
+            return (f"ERROR: old_text is empty; no changes made. Copy the lines to change from {path!r} "
+                    "into old_text, or use write_file for a whole new file.")
         computed = _compute_edit(body, old_text, new_text)
         if computed is None:
             return (
                 f"ERROR: SEARCH block not found in {path!r} (tried exact "
-                "and fuzzy matching); no changes made. Re-read the file "
-                "and copy the block exactly."
+                "and fuzzy matching); no changes made." + _closest(body, old_text)
             )
         new_body, fuzzy = computed
         diff = _unified_diff(path, body, new_body)
         with open(target, "w", encoding="utf-8") as fh:
             fh.write(new_body)
+        check = _check_note(target, path)
         if tracker is not None:
             tracker.record_edit(_rel(project_dir, target), existed=True)
         fuzzy_note = (
@@ -687,7 +763,7 @@ def _make_edit(project_dir: str, tracker: Any):
             if fuzzy
             else ""
         )
-        return f"Edited {path!r}{fuzzy_note}:\n{diff}"
+        return f"Edited {path!r}{fuzzy_note}:\n{diff}" + check
 
     return _edit
 
@@ -702,7 +778,7 @@ def _make_write_file(project_dir: str, tracker: Any):
         if tracker is not None:
             tracker.record_write(_rel(project_dir, target), existed=existed)
         verb = "Overwrote" if existed else "Wrote"
-        return f"{verb} {len(content)} chars to {path!r}"
+        return f"{verb} {len(content)} chars to {path!r}" + _check_note(target, path)
 
     return _write_file
 
@@ -838,9 +914,7 @@ def coder_tools(
                 },
                 "required": ["path"],
             },
-            func=lambda path, offset=1, limit=200: _read(
-                path, offset, limit, project_dir
-            ),
+            func=_make_read(project_dir),
             read_only=True,
         ),
         Tool(
