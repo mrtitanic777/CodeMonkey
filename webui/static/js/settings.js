@@ -1123,6 +1123,11 @@ function drawUsageChart(box, days, table) {
 
 /* What's new: each version's changes in plain words, newest first. */
 var WHATS_NEW = [
+  ["0.0.5", "November 2026", [
+    ["Thinking without rereading", "With Strata, changing how hard the model thinks no longer makes it read the whole conversation again: only the length of its thinking changes, so each message starts in about a second instead of many."],
+    ["Quicker steps", "After tool results that went fine, the next step thinks less; after a failure it gets its full thinking again."],
+    ["Long tasks finish", "A task that reaches its tool rounds while still making progress carries on, up to two more stretches. One that is stuck stops and says what is done, what is left and what it would do next."]
+  ]],
   ["0.0.4", "November 2026", [
     ["Voice calls", "The phone button by the message box starts a call: talk, and the AI answers out loud in a lifelike voice (Kokoro), made on this computer. Talk over it to interrupt. Settings > General sets it up and picks the voice."],
     ["Pictures and videos", "Replies can show pictures the AI saved from the web, and YouTube or Vimeo links become cards that play when clicked. The AI can watch a video file as frames and read what is said in it."],
