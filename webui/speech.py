@@ -36,14 +36,28 @@ def speech_dir() -> str:
         os.environ.get("LOCALAPPDATA") or os.path.expanduser("~/.local/share"), "CodeMonkey", "speech")
 
 
+def whisper_program() -> Optional[str]:
+    """whisper.cpp's whisper-cli: in the speech folder, or on the PATH (Homebrew's whisper-cpp on a Mac)."""
+    base = speech_dir()
+    return next((p for p in (os.path.join(base, "bin", "Release", "whisper-cli.exe"),
+                             os.path.join(base, "bin", "whisper-cli.exe"), os.path.join(base, "bin", "whisper-cli"))
+                 if os.path.isfile(p)), None) or shutil.which("whisper-cli")
+
+
 def whisper() -> Optional[Tuple[str, str]]:
     """(whisper.cpp's whisper-cli, its model file), or None when hearing is not set up."""
-    base = speech_dir()
-    exe = next((p for p in (os.path.join(base, "bin", "Release", "whisper-cli.exe"),
-                            os.path.join(base, "bin", "whisper-cli.exe"), os.path.join(base, "bin", "whisper-cli"))
-                if os.path.isfile(p)), None) or shutil.which("whisper-cli")
-    models = sorted(glob.glob(os.path.join(base, "ggml-*.bin")))
+    exe = whisper_program()
+    models = sorted(glob.glob(os.path.join(speech_dir(), "ggml-*.bin")))
     return (exe, models[0]) if exe and models else None
+
+
+def program_env(exe: str) -> dict:
+    """The environment to run *exe* in: on Linux its own folder holds the libraries it loads."""
+    env = dict(os.environ)
+    if os.name != "nt":
+        folder = os.path.dirname(os.path.abspath(exe))
+        env["LD_LIBRARY_PATH"] = folder + (os.pathsep + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
+    return env
 
 
 def piper() -> Optional[Tuple[str, str]]:
@@ -165,7 +179,7 @@ def hear(audio: bytes) -> str:
             fh.write(audio)
         done = subprocess.run([tool[0], "-m", tool[1], "-f", wav, "-t", threads(), "-np", "-nt"],
                               capture_output=True, text=True, encoding="utf-8", errors="replace",
-                              timeout=120, creationflags=_NO_WINDOW)
+                              timeout=120, creationflags=_NO_WINDOW, env=program_env(tool[0]))
     finally:
         try:
             os.remove(wav)

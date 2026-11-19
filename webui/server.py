@@ -737,6 +737,14 @@ class WebHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(data)
                 return
+            if path == "/api/speech/setup":   # what setting up hearing and the voice would fetch, and how far it got
+                from . import speechsetup
+
+                setup = self.app.__dict__.setdefault("speech_setup", speechsetup.Setup())
+                return self._json({"hear": speechsetup.plan(["hear"]), "voice": speechsetup.plan(["voice"]),
+                                   "platform": "-".join(speechsetup.this_platform()),
+                                   "hear_program": speechsetup.this_platform() in speechsetup.PROGRAMS,
+                                   "progress": setup.snapshot()})
             if path == "/api/speech":   # what a call can do here: hear (whisper.cpp), and with which voice
                 from . import speech
 
@@ -1297,6 +1305,16 @@ class WebHandler(BaseHTTPRequestHandler):
                     return self._error(str(exc), 503)
                 except (ValueError, OSError, subprocess.SubprocessError) as exc:
                     return self._error(str(exc), 400)
+            if path == "/api/speech/setup":   # fetch and check hearing and/or the call voice (webui/speechsetup.py)
+                if self._remote():
+                    return self._error("only on the computer itself", 403)
+                from . import speechsetup
+
+                parts = [p for p in (self._read_json().get("parts") or []) if p in ("hear", "voice")]
+                if not parts:
+                    return self._error("parts: hear and/or voice", 400)
+                setup = self.app.__dict__.setdefault("speech_setup", speechsetup.Setup())
+                return self._json(setup.start(parts))
             if path == "/api/speak":   # a sentence of a reply, said by the voice set up (Kokoro, else Piper)
                 from . import speech
 

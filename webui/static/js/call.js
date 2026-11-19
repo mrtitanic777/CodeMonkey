@@ -45,7 +45,7 @@ function startCall() {
   callStatus("starting");
   fetch("/api/speech").then(function (r) { return r.json(); }).then(function (s) {
     CALL.voice = s.voice || "system"; CALL.hearOk = !!s.hear;
-    if (!s.hear) throw new Error("Speech-to-text is not set up, so a call cannot hear you.");
+    if (!s.hear) throw new Error("A call needs hearing set up first: Settings > General > Voice calls and video sound.");
     return navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
   }).then(function (stream) {
     if (!CALL.on) { stream.getTracks().forEach(function (t) { t.stop(); }); return; }

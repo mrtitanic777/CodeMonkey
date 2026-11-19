@@ -336,7 +336,7 @@ function pageHead(pane, title, sub) {
 
 var PAGES = {};
 var PAGE_WORDS = {
-  general: "general default model reasoning effort activity panel appearance text size motion",
+  general: "general default model reasoning effort activity panel appearance text size motion voice call speech whisper kokoro hearing",
   models: "models servers provider test connection default hosted local",
   permissions: "permissions ask allow never edit run read helpers guard guess kernel labels commands always risky delete dangerous",
   usage: "usage tokens tasks cost rates spend time",
@@ -473,6 +473,45 @@ PAGES.general = function (pane) {
         })));
     }
   }
+  // hearing (whisper.cpp) and the lifelike call voice (Kokoro): fetched on request, checked, kept outside the app
+  var setupRow = row("srow", "Voice calls and video sound", "Checking what is set up…");
+  pane.appendChild(setupRow);
+  function mb(n) { return Math.round(n / 1e6) + " MB"; }
+  function showSetup(sp) {
+    var sub = setupRow.querySelector("i"), old = setupRow.querySelector(".btn");
+    if (old) old.remove();
+    var p = sp.progress || {};
+    if (p.running) {
+      sub.textContent = "Setting up: " + (p.step || "starting") + " · " + (p.total ? Math.round(100 * p.got / p.total) : 0) +
+        "% (" + mb(p.got) + " of " + mb(p.total) + ")";
+      setTimeout(function () { fetch("/api/speech/setup").then(function (r) { return r.json(); }).then(showSetup).catch(function () {}); }, 800);
+      return;
+    }
+    var items = (sp.hear || []).concat(sp.voice || []);
+    if (!items.length) {
+      sub.textContent = p.done ? "Done. Calls can hear you and speak with the Kokoro voice; reopen Settings to pick a voice."
+        : "Ready: calls and videos are heard (whisper.cpp), and calls speak with Kokoro.";
+      return;
+    }
+    var total = items.reduce(function (n, i) { return n + i.size; }, 0);
+    sub.textContent = (p.error ? "The last try stopped: " + p.error + ". " : "") +
+      "Hearing what you say (whisper.cpp) and a lifelike voice (Kokoro), made on this computer. About " + mb(total) +
+      " to download, once." +
+      (sp.platform.indexOf("mac") === 0 && !sp.hear_program ? " On a Mac, hearing needs Homebrew's whisper-cpp (brew install whisper-cpp)." : "");
+    setupRow.appendChild(button("Set up", function () {
+      askConfirm("Set up voice calls?", "CodeMonkey will download, check against their published checksums, and keep outside the app:\n\n" +
+        items.map(function (i) { return "• " + i.what + " (" + mb(i.size) + ")"; }).join("\n") +
+        "\n\nThey come from whisper.cpp's and kokoro-onnx's own releases, and Python's package index.", "Download " + mb(total), function () {
+        var parts = [];
+        if ((sp.hear || []).length) parts.push("hear");
+        if ((sp.voice || []).length) parts.push("voice");
+        api("POST", "/api/speech/setup", { parts: parts }).then(function (prog) { sp.progress = prog; showSetup(sp); }).catch(toastError);
+      });
+    }, "primary"));
+  }
+  fetch("/api/speech/setup").then(function (r) { return r.json(); }).then(showSetup).catch(function () {
+    setupRow.querySelector("i").textContent = "Could not check what is set up.";
+  });
   // the voice a call speaks with (webui/speech.py): Kokoro's voices when it is set up
   var callRow = row("srow", "Call voice", "The voice that talks in a voice call (the phone button by the message box)");
   pane.appendChild(callRow);

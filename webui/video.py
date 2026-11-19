@@ -47,9 +47,9 @@ def ffmpeg(name: str = "ffmpeg") -> Optional[str]:
     return None
 
 
-def _run(args: List[str], timeout: float = 600) -> subprocess.CompletedProcess:
+def _run(args: List[str], timeout: float = 600, env: Optional[dict] = None) -> subprocess.CompletedProcess:
     return subprocess.run(args, capture_output=True, text=True, errors="replace", timeout=timeout,
-                          creationflags=_NO_WINDOW)
+                          creationflags=_NO_WINDOW, env=env)
 
 
 def clock(seconds: float) -> str:
@@ -186,9 +186,10 @@ def transcribe(video: str, work_dir: str) -> List[Tuple[float, float, str]]:
     _run([ffmpeg(), "-hide_banner", "-loglevel", "error", "-y", "-i", video, "-vn", "-ac", "1", "-ar", "16000",
           "-c:a", "pcm_s16le", wav], 900)
     try:
-        from .speech import threads
+        from .speech import program_env, threads
 
-        _run([tool[0], "-m", tool[1], "-f", wav, "-t", threads(), "-np", "-oj", "-of", out], 3600)
+        _run([tool[0], "-m", tool[1], "-f", wav, "-t", threads(), "-np", "-oj", "-of", out], 3600,
+             env=program_env(tool[0]))
         with open(out + ".json", encoding="utf-8", errors="replace") as fh:
             data = json.load(fh)
     finally:
