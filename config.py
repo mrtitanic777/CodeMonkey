@@ -26,7 +26,7 @@ class Config:
     agent_name: str = "Assistant"
     workspace: str = "./agent-workspace"
     approval_mode: str = "ask"  # "ask" | "auto"
-    max_iterations: int = 30
+    max_iterations: int = 200
     skills_dir: str = "./skills"
     # Coding-harness settings (see the "coder:" section in config.yaml).
     # Keys used: project_dir, approval_mode, context_files, commands_dir,

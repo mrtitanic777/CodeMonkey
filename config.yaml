@@ -86,7 +86,8 @@ approval_mode: "ask"
 
 # Safety cap on tool-calling rounds per user message (scaled by effort: low x0.5, high x1.5,
 # max x2). A whole program takes many look-ups; a loop repeating one call is stopped separately.
-max_iterations: 100
+# A turn still making progress at the cap gets up to two more stretches of the same size.
+max_iterations: 200
 
 # Where skill directories live (each contains a SKILL.md).
 skills_dir: "./skills"
