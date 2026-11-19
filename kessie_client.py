@@ -2,29 +2,28 @@
 
 KeSSie (https://github.com/philtimmes/KeSSie) is a source-available LLM
 serving layer that exposes an OpenAI-compatible ``/v1/chat/completions``
-endpoint with one big difference: it never returns structured ``tool_calls``.
-Instead it instructs the model to emit tool calls as text blocks::
+endpoint and gives a model recall over conversations far longer than its
+context window. Tool calls come back as OpenAI-style ``tool_calls`` from
+current KeSSie servers, or, from older ones, as text blocks::
 
     <tool_call>
     {"name": "tool_name", "arguments": {"key": "value"}}
     </tool_call>
 
-This module is a **black-box HTTP integration**: it speaks to a running
-KeSSie server over HTTP and translates between its text-block tool format
-and the OpenAI-style ``tool_calls`` our ``AgentLoop`` expects. No KeSSie
-code is copied or reimplemented here; only the (functional, documented)
-text-block format is parsed.
+Both are turned into the ``tool_calls`` our ``AgentLoop`` expects. This module
+is a **black-box HTTP integration**: it speaks to a running KeSSie server over
+HTTP. No KeSSie code is copied or reimplemented here.
 
 Sharp edges:
 
-- KeSSie's server is stateless per request: it evicts the conversation cache
-  after every turn, so it re-ingests the *full* message history on each call.
-  ``max_history_chars`` caps what we send (system prompt + most recent turns)
-  to keep per-request ingest cost sane. Do not trust the advertised
-  multi-million-token ``max_model_len`` for latency planning.
-- KeSSie appends a hedging-coaching addendum to the system prompt, which can
-  suppress tool use. If the model stops calling tools, ask the server
-  operator for a flag to disable the addendum.
+- KeSSie keeps each conversation's memory under the ``conversation_id`` it is
+  sent (webui/app.py gives a session's turns the session's id). It takes a
+  history that starts inside what it already holds as a continuation, but one
+  that differs from it (a summary in place of older messages) makes it start
+  over, so CodeMonkey sends the recent messages (``max_history_chars``) and
+  does not summarise for it.
+- Do not trust the advertised multi-million-token ``max_model_len`` for latency
+  planning: what the model reads per request is KeSSie's window.
 - Mid-generation recall can truncate a ``<tool_call>`` block; the parser
   below tolerates unterminated blocks exactly like KeSSie's own parser does.
 - Our loop's ``tool``-role messages are translated to ``user``-role messages

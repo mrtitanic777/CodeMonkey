@@ -7,7 +7,6 @@ Run from the project root:
     python3 tests/test_doctor.py
 """
 
-import ast
 import os
 import sys
 import tempfile

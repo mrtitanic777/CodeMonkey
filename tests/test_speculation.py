@@ -15,7 +15,6 @@ sys.path.insert(0, ROOT)
 
 from speculation import (  # noqa: E402
     SAFE_TOOLS,
-    SpeculativeRegistry,
     is_speculatable,
     propose_actions,
     wrap_registry,

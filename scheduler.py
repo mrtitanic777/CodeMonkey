@@ -207,7 +207,7 @@ def main() -> None:
         print("Fired:", ", ".join(fired) if fired else "(none due)")
         return
 
-    print(f"Scheduler running. Jobs file: jobs.yaml. Ctrl-C to stop.")
+    print("Scheduler running. Jobs file: jobs.yaml. Ctrl-C to stop.")
     while True:
         try:
             check_once(config, workspace)

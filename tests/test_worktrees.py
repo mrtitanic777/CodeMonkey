@@ -1,6 +1,5 @@
 """Worktrees: a branch and folder of its own for a session or an agent."""
 
-import json
 import os
 import subprocess
 import sys

@@ -1297,7 +1297,7 @@ class WebHandler(BaseHTTPRequestHandler):
                     return self._error(str(exc), 503)
                 except (ValueError, OSError, subprocess.SubprocessError) as exc:
                     return self._error(str(exc), 400)
-            if path == "/api/speak":   # a sentence of a reply, said by the voice set up (Piper)
+            if path == "/api/speak":   # a sentence of a reply, said by the voice set up (Kokoro, else Piper)
                 from . import speech
 
                 body = self._read_json()

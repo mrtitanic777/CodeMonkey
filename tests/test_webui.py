@@ -18,7 +18,7 @@ sys.path.insert(0, ROOT)
 
 from http.server import ThreadingHTTPServer  # noqa: E402
 
-from webui.app import WebApp, WebSession  # noqa: E402
+from webui.app import WebApp  # noqa: E402
 from webui.server import WebHandler  # noqa: E402
 
 

@@ -990,7 +990,6 @@ def test_library_pages_are_sandboxed_and_other_pages_cannot_drive_the_app():
 
 
 def test_extra_tools_load_on_request_and_a_watch_job_only_wakes_on_change():
-    import datetime
     import json
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -2110,7 +2109,6 @@ def test_context_offload_moves_output_out_in_stages():
     off = Offloader(36_000)
     view = off.apply(msgs, calls, set())
     assert off.tier == "mild" and off.last["fill"] < offload.MILD, off.last
-    text = {i: m["content"] for i, m in zip([i for i in range(len(msgs))], view)}
     gone = [i for i in tool_at if view[i]["content"].startswith("[Offloaded to save room")]
     assert tool_at[0] in gone, "the reading that was made again later goes first"
     assert view[tool_at[0]]["content"] == ("[Offloaded to save room: read a.py (100 lines). Run the tool again "

@@ -15,7 +15,6 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from condense import (  # noqa: E402
-    CondensingRegistry,
     OutputStore,
     model_summarizer,
     recall_output,

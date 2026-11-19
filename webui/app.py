@@ -1373,7 +1373,7 @@ class WebSession:
             # so it does not push the real conversation out and make the next turn read it all again
             client.params["strata_checkpoint"] = False
         if isinstance(client, KeSSieClient):
-            # KeSSie re-ingests history per request; keep it bounded. It keeps each conversation's
+            # what is sent to KeSSie each time stays bounded (the recent part). It keeps each conversation's
             # memory under the id it is sent, so a session's turns use the session's id (the same
             # after a restart), and a one-off request a fresh one that does not mix into it.
             client.max_history_chars = int(self.settings["context_budget"]) * 4

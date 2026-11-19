@@ -61,10 +61,10 @@ providers:
   # vllm:
   #   base_url: "http://localhost:8000/v1"
   #   api_key_env: ""
-  # KeSSie backend (friend-built huge-context serving layer). The adapter
-  # translates KeSSie's <tool_call> text blocks into tool calls for the loop.
-  # NOTE: KeSSie's server is stateless per request (it re-ingests history
-  # every turn), so max_history_chars caps per-request cost.
+  # KeSSie (github.com/philtimmes/KeSSie): long-conversation recall in front of
+  # a model server. It keeps each conversation's memory under the session's id,
+  # so CodeMonkey sends only the recent part (max_history_chars) and does not
+  # summarise older messages itself. Tool calls come back parsed or as text.
   # kessie:
   #   base_url: "http://localhost:8200/v1"
   #   api_key_env: ""

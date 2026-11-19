@@ -12,7 +12,6 @@ Run from the project root:
     python3 tests/test_hook_condense.py
 """
 
-import json
 import os
 import shlex
 import sys
@@ -130,7 +129,7 @@ def test_post_tool_note_appended_and_recorder_sees_final():
 
 def test_audit_sees_full_output_model_sees_condensed():
     stack, recorder, _ = make_stack(post_hooks=(NOTE_RESULT_LEN,))
-    out = stack.execute("bash", {})
+    stack.execute("bash", {})
     # The audit hook saw the full pre-condensation result (hook protocol
     # caps the payload at 4000 chars) — its note survives in the stored
     # raw output, retrievable via /show.

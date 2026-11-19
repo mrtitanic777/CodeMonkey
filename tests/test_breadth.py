@@ -7,7 +7,6 @@ Stdlib only. Hook commands are tiny inline shell snippets run via
 subprocess; no network, no API key.
 """
 
-import json
 import os
 import sys
 import tempfile
